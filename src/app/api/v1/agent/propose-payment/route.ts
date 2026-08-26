@@ -8,6 +8,8 @@ import { computeAuditLogHash, computeSha256 } from "@/lib/security/audit-chain";
 import { executeRazorpayOrder } from "@/lib/razorpay/client";
 import { EventBus } from "@/lib/events/event-bus";
 
+export const dynamic = "force-dynamic";
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();

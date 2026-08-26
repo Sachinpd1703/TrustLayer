@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { computeAuditLogHash, computeSha256 } from "@/lib/security/audit-chain";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const logs = await prisma.auditLog.findMany({
