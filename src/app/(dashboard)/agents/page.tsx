@@ -14,7 +14,7 @@ interface AgentRecord {
   totalSpentPaise: number;
 }
 
-export function AgentsPage() {
+export default function AgentsPage() {
   const [agents, setAgents] = useState<AgentRecord[]>([]);
 
   const fetchAgents = async () => {
@@ -123,5 +123,3 @@ export function AgentsPage() {
     </div>
   );
 }
-
-export default AgentsPage;

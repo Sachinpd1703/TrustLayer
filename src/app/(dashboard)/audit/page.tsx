@@ -15,7 +15,7 @@ interface AuditLogRow {
   currentLogHash: string;
 }
 
-export function AuditPage() {
+export default function AuditPage() {
   const [logs, setLogs] = useState<AuditLogRow[]>([]);
   const [verification, setVerification] = useState<{
     isValid: boolean;
@@ -149,5 +149,3 @@ export function AuditPage() {
     </div>
   );
 }
-
-export default AuditPage;
