@@ -82,7 +82,7 @@ The project is structured into **5 distinct phases**, ensuring that an AI coding
 
 | Milestone | Expected Output | Verification Method |
 | :--- | :--- | :--- |
-| **M1: Database & Seed** | SQLite DB initialized with test agents & policies | `npx prisma studio` shows seeded records |
+| **M1: Database & Seed** | PostgreSQL DB initialized with test agents & policies | `npx prisma studio` shows seeded records |
 | **M2: Policy Gating API** | `/api/v1/agent/propose-payment` returns `ALLOW` / `REQUIRE_APPROVAL` / `DENY` | Automated unit tests & Postman/curl requests |
 | **M3: Razorpay Test Exec** | Real Razorpay order IDs (`order_xxxx`) generated in Razorpay Dashboard | Razorpay Test Mode dashboard inspection |
 | **M4: Human Approval Flow** | Pending transaction holds until approved; executes Razorpay order immediately on approval | End-to-end UI click test |

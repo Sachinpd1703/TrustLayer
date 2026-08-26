@@ -40,15 +40,15 @@ TrustLayer is an in-line, policy-driven authorization and governance gateway bet
 
 ## 3. User Personas & Target Users
 
-### Persona 1: Enterprise Finance & Security Admin (Priya)
+### Persona 1: Enterprise Finance & Security Admin (Sachin)
 * **Role:** Sets financial guardrails, spending limits, vendor allowlists, and kill-switches for organizational AI agents.
 * **Needs:** Real-time visibility, policy-as-code controls, instant revocation capabilities, and compliance reports.
 
-### Persona 2: Human Approver / Business Lead (Rahul)
+### Persona 2: Human Approver / Business Lead (Sunidhi)
 * **Role:** Reviews step-up approval requests for purchases exceeding autonomous agent thresholds.
 * **Needs:** 1-click contextual approval via dashboard/Slack with clear reasoning why the agent wants to spend money.
 
-### Persona 3: AI Buyer Agent Developer (Vikram)
+### Persona 3: AI Buyer Agent Developer (prasad)
 * **Role:** Builds autonomous shopping assistants, procurement tools, or SaaS managers using LangChain, OpenAI, Claude, or MCP.
 * **Needs:** A simple, reliable SDK / REST API / MCP Tool interface to propose payments without managing sensitive payment gateway secrets.
 

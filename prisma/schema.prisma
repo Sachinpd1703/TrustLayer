@@ -1,27 +1,5 @@
-# Backend Schema Document
-## Project: TrustLayer — Gated & Explainable Authorization Gateway for Autonomous Agentic Commerce on Razorpay
-
----
-
-## 1. Database Architecture & Technology
-
-* **Database Engine:** **PostgreSQL** (for Development, Demo & Production Deploy via Neon, Supabase, Docker, or Cloud SQL).
-* **ORM / Query Builder:** **Prisma ORM** (`prisma/schema.prisma`).
-* **Design Principles:**
-  * Strict Foreign Key constraints and relational integrity.
-  * ACID transaction blocks for spend-cap balance evaluation to prevent double-spending race conditions.
-  * Tamper-evident sequential hash chaining across `AuditLog` rows.
-  * Native PostgreSQL `Json` columns for dynamic LLM reasoning payloads and policy evaluation traces.
-  * Sub-millisecond B-tree indexes on `agentId`, `status`, `decision`, and `razorpayOrderId`.
-
----
-
-## 2. Prisma Schema Definition (`prisma/schema.prisma`)
-
-```prisma
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 generator client {
@@ -157,62 +135,3 @@ model AuditLog {
   @@index([agentId])
   @@index([timestamp])
 }
-```
-
----
-
-## 3. Core REST API Request & Response Schemas (Zod)
-
-### 3.1 Propose Payment Schema
-```typescript
-import { z } from "zod";
-
-export const ProposePaymentSchema = z.object({
-  agentId: z.string().min(3),
-  intent: z.string().min(5),
-  reasoningText: z.string().optional(),
-  reasoningHash: z.string().regex(/^sha256:[a-f0-9]{64}$/i),
-  orderPayload: z.object({
-    amountPaise: z.number().int().positive(),
-    currency: z.string().default("INR"),
-    merchantId: z.string().min(3),
-    category: z.string().default("General"),
-    receipt: z.string().optional(),
-    notes: z.record(z.string()).optional(),
-  }),
-});
-
-export type ProposePaymentInput = z.infer<typeof ProposePaymentSchema>;
-```
-
-### 3.2 Approval Decision Schema
-```typescript
-export const ApprovalDecisionSchema = z.object({
-  approvalId: z.string(),
-  decision: z.enum(["APPROVE", "REJECT"]),
-  approverEmail: z.string().email(),
-  decisionNotes: z.string().optional(),
-});
-```
-
----
-
-## 4. Hash Chain Integrity Verification Routine
-
-```typescript
-import crypto from "crypto";
-
-export function computeAuditLogHash(params: {
-  previousLogHash: string;
-  logIndex: number;
-  transactionId: string;
-  agentId: string;
-  amountPaise: number;
-  decision: string;
-  reasoningHash: string;
-  timestamp: string;
-}): string {
-  const content = `${params.previousLogHash}|${params.logIndex}|${params.transactionId}|${params.agentId}|${params.amountPaise}|${params.decision}|${params.reasoningHash}|${params.timestamp}`;
-  return crypto.createHash("sha256").update(content).digest("hex");
-}
-```

@@ -10,8 +10,8 @@
   * *Rationale:* Provides a unified full-stack architecture with server-side API routes for high-speed policy evaluation and a modern React frontend with React Server Components / Client components for real-time dashboards.
 * **Styling & Components:** **Tailwind CSS + shadcn/ui + Lucide Icons + Framer Motion**.
   * *Rationale:* Production-grade, accessible, dark-mode ready financial dashboard components.
-* **Database & ORM:** **SQLite (development/demo) / PostgreSQL (production) via Prisma ORM**.
-  * *Rationale:* Type-safe relational schema with seamless schema migrations and local zero-configuration setup.
+* **Database & ORM:** **PostgreSQL (for Development, Demo & Production via Neon, Supabase, Docker, or Cloud SQL) via Prisma ORM**.
+  * *Rationale:* ACID compliance, relational integrity, native JSONB support, and strict sequential hash-chaining for the audit ledger.
 * **State & Caching / Velocity Engine:** **In-memory Sliding Window Store (with Redis-compatible interface)**.
   * *Rationale:* Sub-millisecond evaluation of rolling 1-hour and 24-hour spend limits.
 * **Payment Gateway SDK:** Official **`razorpay` Node.js SDK (`npm install razorpay`)**.
