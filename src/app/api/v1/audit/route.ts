@@ -7,7 +7,15 @@ export async function GET() {
       orderBy: { logIndex: "desc" },
       take: 50,
       include: {
-        agent: true,
+        agent: {
+          select: {
+            id: true,
+            agentId: true,
+            name: true,
+            role: true,
+            status: true,
+          },
+        },
         transaction: true,
       },
     });
@@ -15,6 +23,7 @@ export async function GET() {
     return NextResponse.json(logs);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
+    console.error("Audit API Fetch Error:", err);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

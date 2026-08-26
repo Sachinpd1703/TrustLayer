@@ -49,13 +49,13 @@ export class PolicyEvaluator {
 
     const violations: string[] = [];
 
-    // Check Currency
+    // Check Currency (Hard Safety Rule)
     if (!policy.allowedCurrencies.includes(currency.toUpperCase())) {
       breakdown.currencyCheck = "FAILED_UNSUPPORTED_CURRENCY";
       violations.push(`Currency '${currency}' is not in allowed list [${policy.allowedCurrencies.join(", ")}]`);
     }
 
-    // Check Merchant Allowlist
+    // Check Merchant Allowlist (Hard Safety Rule)
     const isMerchantAllowed = policy.allowedMerchants.some((m) =>
       merchantId.toLowerCase().includes(m.toLowerCase())
     );
@@ -64,17 +64,7 @@ export class PolicyEvaluator {
       violations.push(`Merchant ID '${merchantId}' is not authorized on the approved vendor whitelist.`);
     }
 
-    // Check Daily Rolling Spend Cap
-    if (rolling24hSpendPaise + amountPaise > policy.dailySpendLimitPaise) {
-      breakdown.velocityCheck = "FAILED_VELOCITY_CAP_EXCEEDED";
-      violations.push(
-        `Cumulative 24h spend (₹${((rolling24hSpendPaise + amountPaise) / 100).toLocaleString()}) exceeds daily cap of ₹${(
-          policy.dailySpendLimitPaise / 100
-        ).toLocaleString()}`
-      );
-    }
-
-    // Check Hard Ceiling vs Step-Up Approval
+    // Check Absolute Hard Ceiling (Hard Safety Rule)
     if (amountPaise > policy.hardCeilingPaise) {
       breakdown.spendCapCheck = "EXCEEDED_HARD_CEILING";
       violations.push(`Amount ₹${(amountPaise / 100).toLocaleString()} exceeds absolute safety ceiling of ₹${(policy.hardCeilingPaise / 100).toLocaleString()}`);
@@ -82,23 +72,27 @@ export class PolicyEvaluator {
       breakdown.spendCapCheck = "EXCEEDED_REQUIRES_APPROVAL";
     }
 
+    // Check Daily Rolling Spend Cap
+    if (rolling24hSpendPaise + amountPaise > policy.dailySpendLimitPaise) {
+      breakdown.velocityCheck = "FAILED_VELOCITY_CAP_EXCEEDED";
+    }
+
     // Check Risk Score
     if (riskScore >= policy.riskScoreThreshold) {
       breakdown.riskScoreCheck = "FLAGGED_HIGH_RISK";
       if (riskScore >= 0.7) {
-        violations.push(`High anomaly/prompt-injection risk detected (Risk Score: ${riskScore})`);
+        violations.push(`Critical anomaly/prompt-injection risk detected (Risk Score: ${riskScore})`);
       }
     }
 
     // -------------------------------------------------------------
     // DECISION ROUTER LOGIC
     // -------------------------------------------------------------
-    // 1. Hard DENY cases:
+    // 1. Hard DENY cases (Security breaches, unlisted merchants, or exceeding hard ceiling)
     if (
       breakdown.merchantWhitelistCheck !== "PASSED" ||
       breakdown.currencyCheck !== "PASSED" ||
       breakdown.spendCapCheck === "EXCEEDED_HARD_CEILING" ||
-      breakdown.velocityCheck !== "PASSED" ||
       riskScore >= 0.7
     ) {
       return {
@@ -109,27 +103,32 @@ export class PolicyEvaluator {
       };
     }
 
-    // 2. REQUIRE_APPROVAL cases:
+    // 2. REQUIRE_APPROVAL cases (High-value order, velocity overflow, or moderate risk score)
     if (
       breakdown.spendCapCheck === "EXCEEDED_REQUIRES_APPROVAL" ||
+      breakdown.velocityCheck === "FAILED_VELOCITY_CAP_EXCEEDED" ||
       breakdown.riskScoreCheck === "FLAGGED_HIGH_RISK"
     ) {
-      const reason =
-        breakdown.spendCapCheck === "EXCEEDED_REQUIRES_APPROVAL"
-          ? `Amount ₹${(amountPaise / 100).toLocaleString()} exceeds autonomous limit of ₹${(
-              policy.maxOrderPaise / 100
-            ).toLocaleString()}. Step-up human approval required.`
-          : `Moderate anomaly risk score (${riskScore}). Step-up human approval required.`;
+      const reasons: string[] = [];
+      if (breakdown.spendCapCheck === "EXCEEDED_REQUIRES_APPROVAL") {
+        reasons.push(`Amount ₹${(amountPaise / 100).toLocaleString()} exceeds autonomous limit of ₹${(policy.maxOrderPaise / 100).toLocaleString()}`);
+      }
+      if (breakdown.velocityCheck === "FAILED_VELOCITY_CAP_EXCEEDED") {
+        reasons.push(`Order puts cumulative spend at ₹${((rolling24hSpendPaise + amountPaise) / 100).toLocaleString()}, exceeding daily cap of ₹${(policy.dailySpendLimitPaise / 100).toLocaleString()}`);
+      }
+      if (breakdown.riskScoreCheck === "FLAGGED_HIGH_RISK") {
+        reasons.push(`Moderate risk score (${riskScore})`);
+      }
 
       return {
         decision: "REQUIRE_APPROVAL",
-        reason,
+        reason: `${reasons.join(" & ")}. Step-up human approval required.`,
         violations: [],
         evaluation: breakdown,
       };
     }
 
-    // 3. ALLOW case:
+    // 3. ALLOW case (Everything within limits)
     return {
       decision: "ALLOW",
       reason: `Auto-approved: Within ₹${(policy.maxOrderPaise / 100).toLocaleString()} spend cap & verified vendor whitelist.`,

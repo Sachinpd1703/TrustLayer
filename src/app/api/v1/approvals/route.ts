@@ -6,7 +6,15 @@ export async function GET() {
     const pending = await prisma.pendingApproval.findMany({
       where: { status: "PENDING" },
       include: {
-        agent: true,
+        agent: {
+          select: {
+            id: true,
+            agentId: true,
+            name: true,
+            role: true,
+            status: true,
+          },
+        },
         transaction: true,
       },
       orderBy: { createdAt: "desc" },
@@ -18,6 +26,7 @@ export async function GET() {
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
+    console.error("Approvals API Fetch Error:", err);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

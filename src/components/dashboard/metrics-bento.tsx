@@ -2,21 +2,13 @@
 
 import React from "react";
 import { TrendingUp, ShieldAlert, CheckCircle2, Clock } from "lucide-react";
-import { LiveStreamEvent } from "@/lib/types";
+import { DashboardMetrics } from "@/hooks/use-live-stream";
 
 interface MetricsBentoProps {
-  events: LiveStreamEvent[];
-  pendingCount: number;
+  metrics: DashboardMetrics;
 }
 
-export function MetricsBento({ events, pendingCount }: MetricsBentoProps) {
-  // Aggregate stats from events
-  const totalVolumePaise = events.reduce((sum, e) => (e.decision === "ALLOW" ? sum + e.amountPaise : sum), 160000);
-  const allowedCount = events.filter((e) => e.decision === "ALLOW").length + 1;
-  const blockedCount = events.filter((e) => e.decision === "DENY").length;
-  const totalTxns = events.length + 1;
-  const passRate = Math.round((allowedCount / totalTxns) * 100);
-
+export function MetricsBento({ metrics }: MetricsBentoProps) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       {/* Card 1: Gated Volume */}
@@ -28,7 +20,9 @@ export function MetricsBento({ events, pendingCount }: MetricsBentoProps) {
           </div>
         </div>
         <div>
-          <h3 className="text-2xl font-bold tracking-tight">₹{(totalVolumePaise / 100).toLocaleString("en-IN")}</h3>
+          <h3 className="text-2xl font-bold tracking-tight">
+            ₹{(metrics.totalVolumePaise / 100).toLocaleString("en-IN")}
+          </h3>
           <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1 mt-0.5">
             <span>● 100% Policy-Gated</span>
           </p>
@@ -44,14 +38,14 @@ export function MetricsBento({ events, pendingCount }: MetricsBentoProps) {
           </div>
         </div>
         <div>
-          <h3 className="text-2xl font-bold tracking-tight">{passRate}%</h3>
+          <h3 className="text-2xl font-bold tracking-tight">{metrics.passRate}%</h3>
           <p className="text-[11px] text-muted-foreground font-medium mt-0.5">
-            {allowedCount} of {totalTxns} within spend caps
+            {metrics.allowedCount} of {metrics.totalTxns} within spend caps
           </p>
         </div>
       </div>
 
-      {/* Card 3: Anomalies Blocked */}
+      {/* Card 3: Threats & Hallucinations Blocked */}
       <div className="p-4 rounded-xl border border-border bg-card shadow-sm space-y-2">
         <div className="flex items-center justify-between text-muted-foreground">
           <span className="text-xs font-semibold uppercase tracking-wider">Threats Blocked</span>
@@ -60,9 +54,11 @@ export function MetricsBento({ events, pendingCount }: MetricsBentoProps) {
           </div>
         </div>
         <div>
-          <h3 className="text-2xl font-bold tracking-tight text-destructive">{blockedCount}</h3>
+          <h3 className="text-2xl font-bold tracking-tight text-destructive">
+            {metrics.blockedCount}
+          </h3>
           <p className="text-[11px] text-muted-foreground font-medium mt-0.5">
-            Hallucinations & rogue transfers
+            Hallucinations & rogue payees blocked
           </p>
         </div>
       </div>
@@ -77,7 +73,7 @@ export function MetricsBento({ events, pendingCount }: MetricsBentoProps) {
         </div>
         <div>
           <h3 className="text-2xl font-bold tracking-tight text-amber-600 dark:text-amber-400">
-            {pendingCount}
+            {metrics.pendingCount}
           </h3>
           <p className="text-[11px] text-muted-foreground font-medium mt-0.5">
             Requires human step-up signature

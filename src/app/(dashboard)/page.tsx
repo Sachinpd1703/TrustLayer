@@ -9,15 +9,21 @@ import { useLiveStream } from "@/hooks/use-live-stream";
 import { useApprovals } from "@/hooks/use-approvals";
 
 export default function DashboardPage() {
-  const { events } = useLiveStream();
+  const { events, metrics, refetch } = useLiveStream();
   const { approvals, resolveApproval } = useApprovals();
+
+  const handleResolveAndRefresh = async (id: string, decision: "APPROVE" | "REJECT", notes?: string) => {
+    const res = await resolveApproval(id, decision, notes);
+    refetch(); // Refresh dashboard feed & metrics
+    return res;
+  };
 
   return (
     <div className="space-y-6">
-      {/* 1. Top Metrics Bento Grid */}
-      <MetricsBento events={events} pendingCount={approvals.length} />
+      {/* 1. Top Metrics Bento Grid (Real Database Telemetry) */}
+      <MetricsBento metrics={metrics} />
 
-      {/* 2. Main Content Grid (65% Live Feed, 35% Sidebar Widgets) */}
+      {/* 2. Main Content Grid (8 Cols Live Feed, 4 Cols Sidebar Widgets) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left 8 Cols: Live Stream */}
         <div className="lg:col-span-8">
@@ -28,7 +34,7 @@ export default function DashboardPage() {
         <div className="lg:col-span-4 space-y-6">
           <ApprovalsWidget
             approvals={approvals}
-            onResolve={resolveApproval}
+            onResolve={handleResolveAndRefresh}
           />
           <ScenarioRunner />
         </div>
