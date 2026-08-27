@@ -4,6 +4,9 @@ import { ApprovalDecisionSchema } from "@/lib/types/schemas";
 import { executeRazorpayOrder } from "@/lib/razorpay/client";
 import { VelocityTracker } from "@/lib/engine/velocity-tracker";
 import { EventBus } from "@/lib/events/event-bus";
+import { computeAuditLogHash, computeSha256 } from "@/lib/security/audit-chain";
+
+export const dynamic = "force-dynamic";
 
 export async function POST(
   req: NextRequest,
@@ -39,6 +42,9 @@ export async function POST(
       );
     }
 
+    // -------------------------------------------------------------
+    // DECISION === "REJECT"
+    // -------------------------------------------------------------
     if (decision === "REJECT") {
       await prisma.pendingApproval.update({
         where: { id },
@@ -54,14 +60,54 @@ export async function POST(
         where: { id: approval.transactionId },
         data: {
           status: "REJECTED",
+          decision: "DENY",
           decisionReason: `Rejected by human approver (${approverEmail}): ${decisionNotes || "No notes"}`,
+        },
+      });
+
+      // Append Audit Log for Rejection
+      const lastLog = await prisma.auditLog.findFirst({
+        orderBy: { logIndex: "desc" },
+      });
+      const prevHash = lastLog?.currentLogHash || computeSha256("GENESIS_BLOCK_TRUSTLAYER_2026");
+      const nextIndex = (lastLog?.logIndex || 0) + 1;
+      const nowIso = new Date().toISOString();
+
+      const currentHash = computeAuditLogHash({
+        previousLogHash: prevHash,
+        logIndex: nextIndex,
+        transactionId: approval.transactionId,
+        agentId: approval.agentId,
+        amountPaise: approval.amountPaise,
+        decision: "DENY",
+        reasoningHash: approval.transaction.reasoningHash,
+        timestamp: nowIso,
+      });
+
+      await prisma.auditLog.create({
+        data: {
+          logIndex: nextIndex,
+          transactionId: approval.transactionId,
+          agentId: approval.agentId,
+          amountPaise: approval.amountPaise,
+          decision: "DENY",
+          intent: approval.transaction.intent,
+          reasoningHash: approval.transaction.reasoningHash,
+          policyEvaluationJson: {
+            approvalId: approval.id,
+            action: "HUMAN_REJECTED",
+            approverEmail,
+            notes: decisionNotes,
+          },
+          previousLogHash: prevHash,
+          currentLogHash: currentHash,
         },
       });
 
       EventBus.broadcast({
         id: approval.transactionId,
         type: "APPROVAL_DECISION",
-        timestamp: new Date().toISOString(),
+        timestamp: nowIso,
         agentId: approval.agentId,
         amountPaise: approval.amountPaise,
         currency: approval.currency,
@@ -93,7 +139,7 @@ export async function POST(
       },
     });
 
-    // Update approval status
+    // 1. Update approval status
     await prisma.pendingApproval.update({
       where: { id },
       data: {
@@ -105,27 +151,69 @@ export async function POST(
       },
     });
 
-    // Update transaction status
+    // 2. Update transaction status & decision to ALLOW
     await prisma.transaction.update({
       where: { id: approval.transactionId },
       data: {
         status: "EXECUTED",
+        decision: "ALLOW",
         razorpayOrderId: rzpOrder.id,
         decisionReason: `Approved by human approver (${approverEmail}) and executed on Razorpay.`,
       },
     });
 
-    // Record velocity & total spend
+    // 3. Record velocity & total spend
     VelocityTracker.recordSpend(approval.agentId, approval.amountPaise);
     await prisma.agent.update({
       where: { agentId: approval.agentId },
       data: { totalSpentPaise: { increment: approval.amountPaise } },
     });
 
+    // 4. Append Audit Log for Approved Execution
+    const lastLog = await prisma.auditLog.findFirst({
+      orderBy: { logIndex: "desc" },
+    });
+    const prevHash = lastLog?.currentLogHash || computeSha256("GENESIS_BLOCK_TRUSTLAYER_2026");
+    const nextIndex = (lastLog?.logIndex || 0) + 1;
+    const nowIso = new Date().toISOString();
+
+    const currentHash = computeAuditLogHash({
+      previousLogHash: prevHash,
+      logIndex: nextIndex,
+      transactionId: approval.transactionId,
+      agentId: approval.agentId,
+      amountPaise: approval.amountPaise,
+      decision: "ALLOW",
+      reasoningHash: approval.transaction.reasoningHash,
+      timestamp: nowIso,
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        logIndex: nextIndex,
+        transactionId: approval.transactionId,
+        agentId: approval.agentId,
+        amountPaise: approval.amountPaise,
+        decision: "ALLOW",
+        intent: approval.transaction.intent,
+        reasoningHash: approval.transaction.reasoningHash,
+        policyEvaluationJson: {
+          approvalId: approval.id,
+          action: "HUMAN_APPROVED_AND_EXECUTED",
+          approverEmail,
+          razorpayOrderId: rzpOrder.id,
+          notes: decisionNotes,
+        },
+        previousLogHash: prevHash,
+        currentLogHash: currentHash,
+      },
+    });
+
+    // 5. Broadcast Real-time Event
     EventBus.broadcast({
       id: approval.transactionId,
       type: "APPROVAL_DECISION",
-      timestamp: new Date().toISOString(),
+      timestamp: nowIso,
       agentId: approval.agentId,
       amountPaise: approval.amountPaise,
       currency: approval.currency,

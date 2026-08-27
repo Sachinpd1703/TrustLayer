@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    // 1. Fetch all transactions
+    // 1. Fetch all transactions & pending approvals
     const [transactions, pendingCount] = await Promise.all([
       prisma.transaction.findMany({
         orderBy: { createdAt: "desc" },
@@ -22,13 +22,11 @@ export async function GET() {
     let blockedCount = 0;
 
     for (const t of transactions) {
-      if (t.decision === "ALLOW" && t.status === "EXECUTED") {
+      if (t.status === "EXECUTED" || t.decision === "ALLOW") {
         totalVolumePaise += t.amountPaise;
         allowedCount++;
-      } else if (t.decision === "DENY" || t.status === "BLOCKED") {
+      } else if (t.status === "BLOCKED" || t.status === "REJECTED" || t.decision === "DENY") {
         blockedCount++;
-      } else if (t.decision === "REQUIRE_APPROVAL") {
-        // Count as evaluated
       }
     }
 
@@ -45,7 +43,10 @@ export async function GET() {
       currency: t.currency,
       merchantId: t.merchantId,
       intent: t.intent,
-      decision: t.decision as "ALLOW" | "REQUIRE_APPROVAL" | "DENY",
+      decision: (t.status === "EXECUTED" ? "ALLOW" : t.status === "REJECTED" ? "DENY" : t.decision) as
+        | "ALLOW"
+        | "REQUIRE_APPROVAL"
+        | "DENY",
       reason: t.decisionReason,
       razorpayOrderId: t.razorpayOrderId || undefined,
       riskScore: t.riskScore,
