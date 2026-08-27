@@ -37,14 +37,14 @@ const navItems = [
     icon: Bot,
   },
   {
-    label: "Audit Explorer",
-    href: "/audit",
-    icon: FileCheck,
-  },
-  {
     label: "Agent Simulator",
     href: "/simulator",
     icon: Terminal,
+  },
+  {
+    label: "Audit Explorer",
+    href: "/audit",
+    icon: FileCheck,
   },
 ];
 
