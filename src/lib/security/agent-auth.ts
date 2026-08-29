@@ -5,6 +5,16 @@ export interface AgentAuthVerificationResult {
   error?: string;
 }
 
+const seenNonces = new Set<string>();
+
+export function verifyAntiReplayNonce(nonce?: string): boolean {
+  if (!nonce) return true; // Optional for basic testing
+  if (seenNonces.has(nonce)) return false;
+  seenNonces.add(nonce);
+  if (seenNonces.size > 5000) seenNonces.clear();
+  return true;
+}
+
 export function verifyAgentSignature(params: {
   publicKeyHex: string;
   signatureHex: string;

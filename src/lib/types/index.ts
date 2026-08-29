@@ -1,5 +1,7 @@
 export type DecisionType = "ALLOW" | "REQUIRE_APPROVAL" | "DENY";
 
+export type ApprovalTier = "TIER_AUTONOMOUS" | "TIER_SINGLE_MANAGER" | "TIER_DUAL_CUSTODY" | "TIER_DENY";
+
 export type TransactionStatus =
   | "EXECUTED"
   | "PENDING_APPROVAL"
@@ -10,21 +12,29 @@ export type TransactionStatus =
 export interface PolicyEvaluationBreakdown {
   spendCapCheck: "PASSED" | "EXCEEDED_REQUIRES_APPROVAL" | "EXCEEDED_HARD_CEILING";
   merchantWhitelistCheck: "PASSED" | "FAILED_UNAUTHORIZED_MERCHANT";
+  mccCheck: "PASSED" | "FAILED_BLOCKED_MCC";
+  temporalCheck: "PASSED" | "FLAGGED_AFTER_HOURS";
   velocityCheck: "PASSED" | "FAILED_VELOCITY_CAP_EXCEEDED";
   currencyCheck: "PASSED" | "FAILED_UNSUPPORTED_CURRENCY";
   riskScoreCheck: "PASSED" | "FLAGGED_HIGH_RISK";
   details: {
     requestedAmountPaise: number;
-    maxOrderPaise: number;
+    tier1MaxOrderPaise: number;
+    tier2ThresholdPaise: number;
+    tier3ThresholdPaise: number;
+    hardCeilingPaise: number;
     rolling24hSpendPaise: number;
     dailySpendLimitPaise: number;
     merchantId: string;
+    mccCode: string;
     riskScore: number;
+    approvalTier: ApprovalTier;
   };
 }
 
 export interface DecisionResult {
   decision: DecisionType;
+  approvalTier: ApprovalTier;
   reason: string;
   violations: string[];
   evaluation: PolicyEvaluationBreakdown;
@@ -34,7 +44,7 @@ export interface DecisionResult {
 
 export interface LiveStreamEvent {
   id: string;
-  type: "TRANSACTION_PROPOSAL" | "APPROVAL_DECISION" | "KILL_SWITCH_TRIGGERED";
+  type: "TRANSACTION_PROPOSAL" | "APPROVAL_DECISION" | "KILL_SWITCH_TRIGGERED" | "AGENT_PROVISIONED";
   timestamp: string;
   agentId: string;
   amountPaise: number;

@@ -8,6 +8,7 @@ export async function GET() {
   try {
     const policy = await prisma.policyRule.findFirst({
       where: { isActive: true },
+      include: { department: true },
     });
     return NextResponse.json(policy || {});
   } catch (err: unknown) {
@@ -21,7 +22,10 @@ export async function PUT(req: NextRequest) {
     const body = await req.json();
     const parsed = PolicyRuleSchema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json({ error: "INVALID_POLICY_DATA", details: parsed.error.format() }, { status: 400 });
+      return NextResponse.json(
+        { error: "INVALID_POLICY_DATA", details: parsed.error.format() },
+        { status: 400 }
+      );
     }
 
     const existing = await prisma.policyRule.findFirst({
@@ -42,6 +46,7 @@ export async function PUT(req: NextRequest) {
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
+    console.error("Policy Update Error:", err);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
