@@ -1,11 +1,45 @@
 "use client";
 
-import React, { useState } from "react";
-import { Terminal, Play, ShieldCheck, AlertTriangle, Ban, Cpu, ArrowRight, Loader2, Skull, ShieldAlert, Zap } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import {
+  Terminal,
+  Play,
+  ShieldCheck,
+  AlertTriangle,
+  Ban,
+  Cpu,
+  ArrowRight,
+  Loader2,
+  Skull,
+  ShieldAlert,
+  Zap,
+  Bot,
+  UserCheck,
+  PowerOff,
+  Building2,
+} from "lucide-react";
 import { TrustLayerAgentClient } from "@/lib/agent-sdk/client";
+
+interface AgentOption {
+  id: string;
+  agentId: string;
+  name: string;
+  status: "ACTIVE" | "SUSPENDED" | "REVOKED";
+  role: string;
+  maxPerOrderCap: number;
+  dailySpendCap: number;
+  monthlyBudgetCap: number;
+  totalSpentPaise: number;
+  department?: {
+    name: string;
+    code: string;
+  };
+}
 
 export default function SimulatorPage() {
   const [activeTab, setActiveTab] = useState<"standard" | "redteam">("standard");
+  const [agents, setAgents] = useState<AgentOption[]>([]);
+  const [selectedAgentId, setSelectedAgentId] = useState<string>("agent_procure_v2");
 
   // Standard Simulator State
   const [prompt, setPrompt] = useState("Renew monthly Figma license for 2 developer seats at ₹1,600");
@@ -15,20 +49,49 @@ export default function SimulatorPage() {
   const [isRunning, setIsRunning] = useState(false);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
 
-  const handleRunProposal = async (pPrompt: string, pAmount: number, pMerchant: string, pMcc = "5734") => {
+  // Fetch registered agents from API
+  useEffect(() => {
+    fetch("/api/v1/agents")
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setAgents(data);
+          if (!data.some((a: AgentOption) => a.agentId === selectedAgentId)) {
+            setSelectedAgentId(data[0].agentId);
+          }
+        }
+      })
+      .catch((err) => console.error("Error fetching agents:", err));
+  }, []);
+
+  const currentAgent = agents.find((a) => a.agentId === selectedAgentId) || agents[0];
+
+  const handleRunProposal = async (
+    pPrompt: string,
+    pAmount: number,
+    pMerchant: string,
+    pMcc = "5734"
+  ) => {
     setIsRunning(true);
     setResult(null);
 
-    const client = new TrustLayerAgentClient("agent_procure_v2", window.location.origin);
+    const client = new TrustLayerAgentClient(selectedAgentId, window.location.origin);
     try {
       const res = await client.proposePayment({
         intent: pPrompt,
-        reasoningText: `Autonomous buyer agent evaluating prompt: "${pPrompt}". Target merchant: ${pMerchant}, MCC: ${pMcc}, amount: ₹${pAmount}.`,
+        reasoningText: `Autonomous buyer agent (${selectedAgentId}) evaluating prompt: "${pPrompt}". Target merchant: ${pMerchant}, MCC: ${pMcc}, amount: ₹${pAmount}.`,
         amountPaise: pAmount * 100,
         merchantId: pMerchant,
         category: pMcc === "6051" ? "Crypto_Exchange" : "SaaS_Tools",
       });
       setResult(res);
+
+      // Re-fetch agents to update live spend progress
+      fetch("/api/v1/agents")
+        .then((r) => r.json())
+        .then((data) => {
+          if (Array.isArray(data)) setAgents(data);
+        });
     } catch (err) {
       console.error(err);
     } finally {
@@ -36,14 +99,24 @@ export default function SimulatorPage() {
     }
   };
 
-  const loadStandardPreset = (pPrompt: string, pAmount: number, pMerchant: string, pMcc = "5734") => {
+  const loadStandardPreset = (
+    pPrompt: string,
+    pAmount: number,
+    pMerchant: string,
+    pMcc = "5734"
+  ) => {
     setPrompt(pPrompt);
     setAmount(pAmount);
     setMerchant(pMerchant);
     setMcc(pMcc);
   };
 
-  const loadRedTeamAttack = (pPrompt: string, pAmount: number, pMerchant: string, pMcc: string) => {
+  const loadRedTeamAttack = (
+    pPrompt: string,
+    pAmount: number,
+    pMerchant: string,
+    pMcc: string
+  ) => {
     setPrompt(pPrompt);
     setAmount(pAmount);
     setMerchant(pMerchant);
@@ -51,13 +124,19 @@ export default function SimulatorPage() {
     handleRunProposal(pPrompt, pAmount, pMerchant, pMcc);
   };
 
+  const currentSpentPaise = currentAgent?.totalSpentPaise || 0;
+  const currentBudgetPaise = currentAgent?.monthlyBudgetCap || 10000000;
+  const budgetPercentage = Math.min(Math.round((currentSpentPaise / currentBudgetPaise) * 100), 100);
+  const isAgentRevoked = currentAgent?.status === "REVOKED";
+
   return (
     <div className="space-y-6 max-w-5xl">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold tracking-tight">AI Buyer Agent Simulator & Red-Team Arena</h1>
           <p className="text-xs text-muted-foreground">
-            Test legitimate autonomous agent proposals and adversarial prompt-injection jailbreak attacks
+            Simulate payment requests from different AI agents, test budget bounds, and launch adversarial attack vectors
           </p>
         </div>
 
@@ -83,7 +162,7 @@ export default function SimulatorPage() {
             }}
             className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 transition-all ${
               activeTab === "redteam"
-                ? "bg-destructive text-destructive-foreground shadow-sm"
+                ? "bg-destructive text-white shadow-sm"
                 : "text-destructive hover:bg-destructive/10"
             }`}
           >
@@ -93,12 +172,104 @@ export default function SimulatorPage() {
         </div>
       </div>
 
+      {/* 🤖 Active AI Agent Selector Banner */}
+      <div className="p-4 rounded-xl border border-border bg-card shadow-sm space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Bot className="h-5 w-5 text-primary" />
+            <div>
+              <label className="text-xs font-bold text-foreground block">
+                Active Simulation Identity:
+              </label>
+              <span className="text-[11px] text-muted-foreground">
+                Select which autonomous bot identity executes the transaction proposal
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <select
+              value={selectedAgentId}
+              onChange={(e) => setSelectedAgentId(e.target.value)}
+              className="px-3 py-1.5 rounded-lg border border-input bg-background font-mono text-xs font-bold text-foreground focus:ring-2 focus:ring-primary focus:outline-none"
+            >
+              {agents.map((ag) => (
+                <option key={ag.id} value={ag.agentId}>
+                  {ag.name} ({ag.agentId}) {ag.status === "REVOKED" ? "⛔ [REVOKED]" : "🟢 [ACTIVE]"}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Selected Agent Telemetry Strip */}
+        {currentAgent && (
+          <div className="pt-2 border-t border-border grid grid-cols-1 sm:grid-cols-3 gap-3 text-[11px] font-mono">
+            <div className="flex items-center justify-between p-2 rounded-lg bg-secondary/40 border border-border">
+              <span className="text-muted-foreground">Status & Dept:</span>
+              <div className="flex items-center gap-1.5 font-bold">
+                <span
+                  className={`px-1.5 py-0.5 rounded text-[10px] ${
+                    isAgentRevoked
+                      ? "bg-destructive/20 text-destructive"
+                      : "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400"
+                  }`}
+                >
+                  {currentAgent.status}
+                </span>
+                <span className="text-foreground">
+                  {currentAgent.department?.code || "GENERAL"}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between p-2 rounded-lg bg-secondary/40 border border-border">
+              <span className="text-muted-foreground">Per-Order Cap:</span>
+              <span className="font-bold text-foreground">
+                ₹{(currentAgent.maxPerOrderCap / 100).toLocaleString("en-IN")}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between p-2 rounded-lg bg-secondary/40 border border-border">
+              <span className="text-muted-foreground">Budget Spent:</span>
+              <span
+                className={`font-bold ${
+                  budgetPercentage >= 100
+                    ? "text-destructive"
+                    : budgetPercentage > 75
+                    ? "text-amber-500"
+                    : "text-foreground"
+                }`}
+              >
+                ₹{(currentSpentPaise / 100).toLocaleString("en-IN")} / ₹{(currentBudgetPaise / 100).toLocaleString("en-IN")} ({budgetPercentage}%)
+              </span>
+            </div>
+          </div>
+        )}
+
+        {isAgentRevoked && (
+          <div className="p-2.5 rounded-lg bg-destructive/15 border border-destructive/30 text-destructive text-xs flex items-center gap-2">
+            <PowerOff className="h-4 w-4 shrink-0" />
+            <span>
+              <b>Warning:</b> This agent&apos;s Emergency Kill-Switch is active. All proposals from <code>{currentAgent.agentId}</code> will be immediately blocked (`403 Forbidden`).
+            </span>
+          </div>
+        )}
+      </div>
+
       {activeTab === "standard" ? (
         <>
           {/* Standard Presets */}
           <div className="flex flex-wrap gap-2">
             <button
-              onClick={() => loadStandardPreset("Renew monthly Figma license for 2 developer seats at ₹1,600", 1600, "mid_figma_01", "5734")}
+              onClick={() =>
+                loadStandardPreset(
+                  "Renew monthly Figma license for 2 developer seats at ₹1,600",
+                  1600,
+                  "mid_figma_01",
+                  "5734"
+                )
+              }
               className="px-3 py-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/15 text-xs font-semibold flex items-center gap-1.5 transition-all text-emerald-700 dark:text-emerald-300"
             >
               <ShieldCheck className="h-3.5 w-3.5" />
@@ -106,7 +277,14 @@ export default function SimulatorPage() {
             </button>
 
             <button
-              onClick={() => loadStandardPreset("Procure dedicated reserved cloud server for Q3 at ₹35,000", 35000, "mid_aws_01", "7372")}
+              onClick={() =>
+                loadStandardPreset(
+                  "Procure dedicated reserved cloud server for Q3 at ₹35,000",
+                  35000,
+                  "mid_aws_01",
+                  "7372"
+                )
+              }
               className="px-3 py-1.5 rounded-lg border border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/15 text-xs font-semibold flex items-center gap-1.5 transition-all text-amber-700 dark:text-amber-300"
             >
               <AlertTriangle className="h-3.5 w-3.5" />
@@ -114,7 +292,14 @@ export default function SimulatorPage() {
             </button>
 
             <button
-              onClick={() => loadStandardPreset("Procure high-performance AI GPU cluster for model training at ₹65,000", 65000, "mid_aws_01", "7372")}
+              onClick={() =>
+                loadStandardPreset(
+                  "Procure high-performance AI GPU cluster for model training at ₹65,000",
+                  65000,
+                  "mid_aws_01",
+                  "7372"
+                )
+              }
               className="px-3 py-1.5 rounded-lg border border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/15 text-xs font-semibold flex items-center gap-1.5 transition-all text-blue-700 dark:text-blue-300"
             >
               <Zap className="h-3.5 w-3.5" />
@@ -174,7 +359,7 @@ export default function SimulatorPage() {
               className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 transition-all shadow-sm disabled:opacity-50"
             >
               {isRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4 fill-current" />}
-              <span>Execute Agent Proposal via TrustLayer</span>
+              <span>Execute Proposal as &quot;{selectedAgentId}&quot;</span>
             </button>
           </div>
         </>
@@ -187,7 +372,7 @@ export default function SimulatorPage() {
               <span>Adversarial Prompt-Injection & Anomaly Arena</span>
             </div>
             <p className="text-xs text-muted-foreground">
-              Select an attack payload below or craft custom adversarial injections to test TrustLayer&apos;s defense barriers.
+              Select an attack payload below or craft custom adversarial injections to test TrustLayer&apos;s defense barriers against bot <code>{selectedAgentId}</code>.
             </p>
           </div>
 
