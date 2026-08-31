@@ -111,6 +111,12 @@ export async function POST(req: NextRequest) {
       intent,
       reasoningText,
       timestamp: new Date(),
+      agentProfile: {
+        totalSpentPaise: Number(agent.totalSpentPaise),
+        monthlyBudgetCap: agent.monthlyBudgetCap,
+        dailySpendCap: agent.dailySpendCap,
+        maxPerOrderCap: agent.maxPerOrderCap,
+      },
       policy: {
         tier1MaxOrderPaise: activePolicy.tier1MaxOrderPaise,
         tier2ThresholdPaise: activePolicy.tier2ThresholdPaise,

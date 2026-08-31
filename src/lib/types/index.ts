@@ -15,6 +15,7 @@ export interface PolicyEvaluationBreakdown {
   mccCheck: "PASSED" | "FAILED_BLOCKED_MCC";
   temporalCheck: "PASSED" | "FLAGGED_AFTER_HOURS";
   velocityCheck: "PASSED" | "FAILED_VELOCITY_CAP_EXCEEDED";
+  budgetCheck: "PASSED" | "EXCEEDED_MONTHLY_BUDGET";
   currencyCheck: "PASSED" | "FAILED_UNSUPPORTED_CURRENCY";
   riskScoreCheck: "PASSED" | "FLAGGED_HIGH_RISK";
   details: {
@@ -25,6 +26,8 @@ export interface PolicyEvaluationBreakdown {
     hardCeilingPaise: number;
     rolling24hSpendPaise: number;
     dailySpendLimitPaise: number;
+    agentTotalSpentPaise: number;
+    agentMonthlyBudgetCap: number;
     merchantId: string;
     mccCode: string;
     riskScore: number;

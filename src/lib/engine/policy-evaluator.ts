@@ -2,6 +2,13 @@ import { PolicyEvaluationBreakdown, DecisionResult, ApprovalTier } from "@/lib/t
 import { VelocityTracker } from "./velocity-tracker";
 import { RiskScorer } from "./risk-scorer";
 
+export interface AgentFinancialProfile {
+  totalSpentPaise: number;
+  monthlyBudgetCap: number;
+  dailySpendCap: number;
+  maxPerOrderCap: number;
+}
+
 export interface MultiTierPolicyRuleset {
   tier1MaxOrderPaise: number;
   tier2ThresholdPaise: number;
@@ -21,7 +28,7 @@ export interface MultiTierPolicyRuleset {
 
 export class PolicyEvaluator {
   /**
-   * Deterministically evaluates an inbound transaction proposal against multi-tier policy rules.
+   * Deterministically evaluates an inbound transaction proposal against multi-tier policy rules and agent budgets.
    */
   static evaluate(params: {
     agentId: string;
@@ -32,6 +39,7 @@ export class PolicyEvaluator {
     intent: string;
     reasoningText?: string;
     timestamp?: Date;
+    agentProfile?: AgentFinancialProfile;
     policy: MultiTierPolicyRuleset;
   }): DecisionResult {
     const {
@@ -43,12 +51,22 @@ export class PolicyEvaluator {
       intent,
       reasoningText,
       timestamp = new Date(),
+      agentProfile = {
+        totalSpentPaise: 0,
+        monthlyBudgetCap: 10000000,
+        dailySpendCap: 2000000,
+        maxPerOrderCap: 500000,
+      },
       policy,
     } = params;
 
     // 1. Calculate Velocity & Risk Score
     const rolling24hSpendPaise = VelocityTracker.getRollingSpendPaise(agentId);
     const riskScore = RiskScorer.evaluate({ intent, reasoningText, amountPaise, merchantId });
+
+    // Effective limits (Strictest between Agent Profile and Global Policy)
+    const effectiveTier1Cap = Math.min(policy.tier1MaxOrderPaise, agentProfile.maxPerOrderCap);
+    const effectiveDailyLimit = Math.min(policy.dailySpendLimitPaise, agentProfile.dailySpendCap);
 
     // 2. Initial Breakdown Matrix
     const breakdown: PolicyEvaluationBreakdown = {
@@ -57,16 +75,19 @@ export class PolicyEvaluator {
       mccCheck: "PASSED",
       temporalCheck: "PASSED",
       velocityCheck: "PASSED",
+      budgetCheck: "PASSED",
       currencyCheck: "PASSED",
       riskScoreCheck: "PASSED",
       details: {
         requestedAmountPaise: amountPaise,
-        tier1MaxOrderPaise: policy.tier1MaxOrderPaise,
+        tier1MaxOrderPaise: effectiveTier1Cap,
         tier2ThresholdPaise: policy.tier2ThresholdPaise,
         tier3ThresholdPaise: policy.tier3ThresholdPaise,
         hardCeilingPaise: policy.hardCeilingPaise,
         rolling24hSpendPaise,
-        dailySpendLimitPaise: policy.dailySpendLimitPaise,
+        dailySpendLimitPaise: effectiveDailyLimit,
+        agentTotalSpentPaise: agentProfile.totalSpentPaise,
+        agentMonthlyBudgetCap: agentProfile.monthlyBudgetCap,
         merchantId,
         mccCode,
         riskScore,
@@ -109,12 +130,17 @@ export class PolicyEvaluator {
       violations.push(`Critical prompt-injection / anomaly risk detected (Risk Score: ${riskScore})`);
     }
 
-    // Check Daily Rolling Spend Cap
-    if (rolling24hSpendPaise + amountPaise > policy.dailySpendLimitPaise) {
+    // --- Agent Monthly Budget Cap Check ---
+    if (agentProfile.totalSpentPaise + amountPaise > agentProfile.monthlyBudgetCap) {
+      breakdown.budgetCheck = "EXCEEDED_MONTHLY_BUDGET";
+    }
+
+    // --- Check Daily Rolling Spend Cap ---
+    if (rolling24hSpendPaise + amountPaise > effectiveDailyLimit) {
       breakdown.velocityCheck = "FAILED_VELOCITY_CAP_EXCEEDED";
     }
 
-    // Check Temporal Working Hours
+    // --- Check Temporal Working Hours ---
     if (policy.enforceWorkingHours) {
       const days = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
       const currentDay = days[timestamp.getUTCDay()];
@@ -132,7 +158,7 @@ export class PolicyEvaluator {
     // DECISION ROUTER LOGIC
     // -------------------------------------------------------------
 
-    // 1. Hard DENY (Security violations or exceeding hard ceiling)
+    // 1. Hard DENY (Security violations, blacklisted MCC, unlisted merchants, or hard ceiling)
     if (
       breakdown.merchantWhitelistCheck !== "PASSED" ||
       breakdown.currencyCheck !== "PASSED" ||
@@ -162,9 +188,16 @@ export class PolicyEvaluator {
       };
     }
 
-    // 3. Tier 2: Single Manager Approval (Tier 1 Cap exceeded, Velocity overflow, or After-hours)
+    // 3. Tier 2: Single Manager Step-Up Approval
+    // Triggered if:
+    // - Agent Monthly Budget is Exceeded!
+    // - Order exceeds per-order auto-cap
+    // - Daily velocity cap is exceeded
+    // - After-hours transaction
+    // - Moderate risk score
     if (
-      amountPaise > policy.tier1MaxOrderPaise ||
+      breakdown.budgetCheck === "EXCEEDED_MONTHLY_BUDGET" ||
+      amountPaise > effectiveTier1Cap ||
       breakdown.velocityCheck === "FAILED_VELOCITY_CAP_EXCEEDED" ||
       breakdown.temporalCheck === "FLAGGED_AFTER_HOURS" ||
       riskScore >= policy.riskScoreThreshold
@@ -173,11 +206,18 @@ export class PolicyEvaluator {
       breakdown.details.approvalTier = "TIER_SINGLE_MANAGER";
 
       const reasons: string[] = [];
-      if (amountPaise > policy.tier1MaxOrderPaise) {
-        reasons.push(`Amount ₹${(amountPaise / 100).toLocaleString()} exceeds autonomous limit of ₹${(policy.tier1MaxOrderPaise / 100).toLocaleString()}`);
+      if (breakdown.budgetCheck === "EXCEEDED_MONTHLY_BUDGET") {
+        reasons.push(
+          `Agent monthly budget (₹${(agentProfile.monthlyBudgetCap / 100).toLocaleString()}) exceeded (Current Total Spent: ₹${(
+            agentProfile.totalSpentPaise / 100
+          ).toLocaleString()})`
+        );
+      }
+      if (amountPaise > effectiveTier1Cap) {
+        reasons.push(`Amount ₹${(amountPaise / 100).toLocaleString()} exceeds autonomous limit of ₹${(effectiveTier1Cap / 100).toLocaleString()}`);
       }
       if (breakdown.velocityCheck === "FAILED_VELOCITY_CAP_EXCEEDED") {
-        reasons.push(`Cumulative 24h spend (₹${((rolling24hSpendPaise + amountPaise) / 100).toLocaleString()}) exceeds daily limit of ₹${(policy.dailySpendLimitPaise / 100).toLocaleString()}`);
+        reasons.push(`Cumulative 24h spend (₹${((rolling24hSpendPaise + amountPaise) / 100).toLocaleString()}) exceeds daily limit of ₹${(effectiveDailyLimit / 100).toLocaleString()}`);
       }
       if (breakdown.temporalCheck === "FLAGGED_AFTER_HOURS") {
         reasons.push("After-hours transaction outside scheduled working hours");
@@ -195,12 +235,12 @@ export class PolicyEvaluator {
       };
     }
 
-    // 4. Tier 1: 100% Autonomous Auto-Approval
+    // 4. Tier 1: 100% Autonomous Auto-Approval (Budget & Velocity & Single-Order all within limits)
     breakdown.details.approvalTier = "TIER_AUTONOMOUS";
     return {
       decision: "ALLOW",
       approvalTier: "TIER_AUTONOMOUS",
-      reason: `Auto-approved: Within ₹${(policy.tier1MaxOrderPaise / 100).toLocaleString()} spend cap & verified vendor whitelist.`,
+      reason: `Auto-approved: Within ₹${(effectiveTier1Cap / 100).toLocaleString()} spend cap, monthly budget & verified vendor whitelist.`,
       violations: [],
       evaluation: breakdown,
     };

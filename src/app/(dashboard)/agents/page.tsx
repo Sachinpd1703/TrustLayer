@@ -246,7 +246,7 @@ export default function AgentsPage() {
 
       {/* Provision New Agent Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/50 backdrop-blur-sm p-4">
           <div className="w-full max-w-lg rounded-xl border border-border bg-card shadow-2xl p-6 space-y-5 animate-in fade-in zoom-in-95">
             {!createdResult ? (
               <>
@@ -353,7 +353,7 @@ export default function AgentsPage() {
                       type="submit"
                       className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90"
                     >
-                      🚀 Provision Agent & Generate Keys
+                      Provision Agent & Generate Keys
                     </button>
                   </div>
                 </form>

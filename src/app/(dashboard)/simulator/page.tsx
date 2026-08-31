@@ -83,7 +83,7 @@ export default function SimulatorPage() {
             }}
             className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 transition-all ${
               activeTab === "redteam"
-                ? "bg-destructive text-white shadow-sm"
+                ? "bg-destructive text-destructive-foreground shadow-sm"
                 : "text-destructive hover:bg-destructive/10"
             }`}
           >

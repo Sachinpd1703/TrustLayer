@@ -66,7 +66,7 @@ TrustLayer utilizes an ultra-clean, high-density fintech aesthetic with high con
 │    Assigned Policy Ruleset:      [ Global Enterprise SaaS & Cloud Policy ▼   ]         │
 │                                                                                        │
 ├────────────────────────────────────────────────────────────────────────────────────────┤
-│ [ Cancel ]                                         [ 🚀 Provision Agent & Generate SDK ]│
+│ [ Cancel ]                                         [ Provision Agent & Generate SDK ]│
 └────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 

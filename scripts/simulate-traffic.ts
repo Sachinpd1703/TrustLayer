@@ -34,7 +34,7 @@ const scenarios = [
 ];
 
 async function runTraffic() {
-  console.log("🚀 TrustLayer AI Agent Traffic Simulator Started...");
+  console.log("TrustLayer AI Agent Traffic Simulator Started...");
   const client = new TrustLayerAgentClient("agent_procure_v2", "http://localhost:3000");
 
   let i = 0;
