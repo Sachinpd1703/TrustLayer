@@ -20,6 +20,8 @@ import {
   ChevronDown,
   Store,
   Tag,
+  List,
+  RotateCcw,
 } from "lucide-react";
 import { TrustLayerAgentClient } from "@/lib/agent-sdk/client";
 
@@ -408,12 +410,12 @@ export default function SimulatorPage() {
                     type="button"
                     onClick={() => {
                       setIsCustomMerchant(!isCustomMerchant);
-                      if (!isCustomMerchant) setMerchant("");
-                      else setMerchant("mid_figma_01");
+                      if (isCustomMerchant) setMerchant("mid_figma_01");
+                      else setMerchant("");
                     }}
-                    className="text-[10px] text-primary hover:underline font-semibold"
+                    className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 hover:bg-primary/20 text-primary font-bold border border-primary/20 transition-colors"
                   >
-                    {isCustomMerchant ? "Use Presets" : "Custom ID"}
+                    {isCustomMerchant ? "↩ Use Dropdown" : "Custom ID"}
                   </button>
                 </div>
 
@@ -434,19 +436,33 @@ export default function SimulatorPage() {
                         </option>
                       ))}
                       <option value="custom" className="bg-card text-foreground dark:bg-[#0B0F19] font-bold">
-                        ✏️ Custom / Manual Merchant ID...
+                        Custom / Manual Merchant ID...
                       </option>
                     </select>
                     <ChevronDown className="h-4 w-4 text-muted-foreground absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   </div>
                 ) : (
-                  <input
-                    type="text"
-                    placeholder="e.g. mid_custom_vendor"
-                    value={merchant}
-                    onChange={(e) => setMerchant(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-lg border border-border bg-card dark:bg-[#111622] text-foreground font-mono focus:ring-2 focus:ring-primary focus:outline-none"
-                  />
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="e.g. mid_custom_vendor"
+                      value={merchant}
+                      onChange={(e) => setMerchant(e.target.value)}
+                      className="w-full pl-3 pr-20 py-2 text-xs rounded-lg border border-border bg-card dark:bg-[#111622] text-foreground font-mono focus:ring-2 focus:ring-primary focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsCustomMerchant(false);
+                        setMerchant("mid_figma_01");
+                      }}
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 px-2 py-0.5 rounded text-[10px] font-bold bg-secondary hover:bg-accent text-foreground border border-border flex items-center gap-1 transition-colors shadow-sm"
+                      title="Return to Presets Dropdown"
+                    >
+                      <List className="h-3 w-3 text-primary" />
+                      <span>Presets</span>
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -461,12 +477,12 @@ export default function SimulatorPage() {
                     type="button"
                     onClick={() => {
                       setIsCustomMcc(!isCustomMcc);
-                      if (!isCustomMcc) setMcc("");
-                      else setMcc("5734");
+                      if (isCustomMcc) setMcc("5734");
+                      else setMcc("");
                     }}
-                    className="text-[10px] text-primary hover:underline font-semibold"
+                    className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 hover:bg-primary/20 text-primary font-bold border border-primary/20 transition-colors"
                   >
-                    {isCustomMcc ? "Use Presets" : "Custom MCC"}
+                    {isCustomMcc ? "↩ Use Dropdown" : "Custom MCC"}
                   </button>
                 </div>
 
@@ -487,19 +503,33 @@ export default function SimulatorPage() {
                         </option>
                       ))}
                       <option value="custom" className="bg-card text-foreground dark:bg-[#0B0F19] font-bold">
-                        ✏️ Custom / Manual MCC Code...
+                        Custom / Manual MCC Code...
                       </option>
                     </select>
                     <ChevronDown className="h-4 w-4 text-muted-foreground absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   </div>
                 ) : (
-                  <input
-                    type="text"
-                    placeholder="e.g. 5734"
-                    value={mcc}
-                    onChange={(e) => setMcc(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-lg border border-border bg-card dark:bg-[#111622] text-foreground font-mono focus:ring-2 focus:ring-primary focus:outline-none"
-                  />
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="e.g. 5734"
+                      value={mcc}
+                      onChange={(e) => setMcc(e.target.value)}
+                      className="w-full pl-3 pr-20 py-2 text-xs rounded-lg border border-border bg-card dark:bg-[#111622] text-foreground font-mono focus:ring-2 focus:ring-primary focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsCustomMcc(false);
+                        setMcc("5734");
+                      }}
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 px-2 py-0.5 rounded text-[10px] font-bold bg-secondary hover:bg-accent text-foreground border border-border flex items-center gap-1 transition-colors shadow-sm"
+                      title="Return to Presets Dropdown"
+                    >
+                      <List className="h-3 w-3 text-primary" />
+                      <span>Presets</span>
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
