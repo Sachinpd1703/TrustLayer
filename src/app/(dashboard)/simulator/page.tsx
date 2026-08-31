@@ -17,6 +17,9 @@ import {
   UserCheck,
   PowerOff,
   Building2,
+  ChevronDown,
+  Store,
+  Tag,
 } from "lucide-react";
 import { TrustLayerAgentClient } from "@/lib/agent-sdk/client";
 
@@ -36,6 +39,29 @@ interface AgentOption {
   };
 }
 
+const PRESET_MERCHANTS = [
+  { id: "mid_figma_01", name: "Figma Design Platform", mcc: "5734", category: "SaaS / Design" },
+  { id: "mid_slack_01", name: "Slack Technologies", mcc: "5734", category: "SaaS / Communication" },
+  { id: "mid_aws_01", name: "Amazon Web Services (AWS)", mcc: "7372", category: "Cloud Infrastructure" },
+  { id: "mid_github_01", name: "GitHub Enterprise", mcc: "5734", category: "Developer Tools" },
+  { id: "mid_cloudflare_01", name: "Cloudflare Network & CDN", mcc: "4816", category: "Network Services" },
+  { id: "mid_taj_hotels", name: "Taj Luxury Hotels", mcc: "7011", category: "Hotels & Lodging" },
+  { id: "mid_indigo_air", name: "IndiGo Airlines Corporate", mcc: "4511", category: "Airlines & Travel" },
+  { id: "mid_untrusted_crypto", name: "⚠️ Shadow Crypto Exchange", mcc: "6051", category: "Crypto / Virtual Currency" },
+  { id: "mid_shady_giftcards", name: "⚠️ Shady Gambling Broker", mcc: "7995", category: "Gambling & Bets" },
+];
+
+const PRESET_MCCS = [
+  { code: "5734", label: "5734 - Computer Software / SaaS", status: "ALLOWED" },
+  { code: "7372", label: "7372 - Cloud Computing & Data Processing", status: "ALLOWED" },
+  { code: "4816", label: "4816 - Computer Network Services", status: "ALLOWED" },
+  { code: "7011", label: "7011 - Hotels & Lodging", status: "ALLOWED" },
+  { code: "4511", label: "4511 - Airlines & Travel Logistics", status: "ALLOWED" },
+  { code: "6051", label: "6051 - Crypto & Virtual Currencies (Blocked)", status: "BLOCKED" },
+  { code: "7995", label: "7995 - Gambling & Betting (Blocked)", status: "BLOCKED" },
+  { code: "4829", label: "4829 - Wire Money Transfers (Blocked)", status: "BLOCKED" },
+];
+
 export default function SimulatorPage() {
   const [activeTab, setActiveTab] = useState<"standard" | "redteam">("standard");
   const [agents, setAgents] = useState<AgentOption[]>([]);
@@ -48,6 +74,10 @@ export default function SimulatorPage() {
   const [mcc, setMcc] = useState("5734");
   const [isRunning, setIsRunning] = useState(false);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
+
+  // Custom Input Toggles
+  const [isCustomMerchant, setIsCustomMerchant] = useState(false);
+  const [isCustomMcc, setIsCustomMcc] = useState(false);
 
   // Fetch registered agents from API
   useEffect(() => {
@@ -66,6 +96,31 @@ export default function SimulatorPage() {
 
   const currentAgent = agents.find((a) => a.agentId === selectedAgentId) || agents[0];
 
+  const handleMerchantSelect = (selectedId: string) => {
+    if (selectedId === "custom") {
+      setIsCustomMerchant(true);
+      setMerchant("");
+    } else {
+      setIsCustomMerchant(false);
+      setMerchant(selectedId);
+      const match = PRESET_MERCHANTS.find((m) => m.id === selectedId);
+      if (match) {
+        setMcc(match.mcc);
+        setIsCustomMcc(false);
+      }
+    }
+  };
+
+  const handleMccSelect = (selectedCode: string) => {
+    if (selectedCode === "custom") {
+      setIsCustomMcc(true);
+      setMcc("");
+    } else {
+      setIsCustomMcc(false);
+      setMcc(selectedCode);
+    }
+  };
+
   const handleRunProposal = async (
     pPrompt: string,
     pAmount: number,
@@ -82,7 +137,7 @@ export default function SimulatorPage() {
         reasoningText: `Autonomous buyer agent (${selectedAgentId}) evaluating prompt: "${pPrompt}". Target merchant: ${pMerchant}, MCC: ${pMcc}, amount: ₹${pAmount}.`,
         amountPaise: pAmount * 100,
         merchantId: pMerchant,
-        category: pMcc === "6051" ? "Crypto_Exchange" : "SaaS_Tools",
+        category: pMcc === "6051" ? "Crypto_Exchange" : pMcc === "7995" ? "Gambling" : "SaaS_Tools",
       });
       setResult(res);
 
@@ -109,6 +164,8 @@ export default function SimulatorPage() {
     setAmount(pAmount);
     setMerchant(pMerchant);
     setMcc(pMcc);
+    setIsCustomMerchant(false);
+    setIsCustomMcc(false);
   };
 
   const loadRedTeamAttack = (
@@ -121,6 +178,8 @@ export default function SimulatorPage() {
     setAmount(pAmount);
     setMerchant(pMerchant);
     setMcc(pMcc);
+    setIsCustomMerchant(false);
+    setIsCustomMcc(false);
     handleRunProposal(pPrompt, pAmount, pMerchant, pMcc);
   };
 
@@ -187,18 +246,23 @@ export default function SimulatorPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="relative inline-block w-full sm:w-auto">
             <select
               value={selectedAgentId}
               onChange={(e) => setSelectedAgentId(e.target.value)}
-              className="px-3 py-1.5 rounded-lg border border-input bg-background font-mono text-xs font-bold text-foreground focus:ring-2 focus:ring-primary focus:outline-none"
+              className="w-full sm:w-auto appearance-none pl-3.5 pr-9 py-2 rounded-lg border border-border bg-card dark:bg-[#111622] text-foreground font-mono text-xs font-bold shadow-sm focus:ring-2 focus:ring-primary focus:outline-none cursor-pointer transition-colors"
             >
               {agents.map((ag) => (
-                <option key={ag.id} value={ag.agentId}>
+                <option
+                  key={ag.id}
+                  value={ag.agentId}
+                  className="bg-card text-foreground dark:bg-[#0B0F19] dark:text-zinc-100 py-1"
+                >
                   {ag.name} ({ag.agentId}) {ag.status === "REVOKED" ? "⛔ [REVOKED]" : "🟢 [ACTIVE]"}
                 </option>
               ))}
             </select>
+            <ChevronDown className="h-4 w-4 text-muted-foreground absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
         </div>
 
@@ -322,34 +386,121 @@ export default function SimulatorPage() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Amount Input */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-foreground block">Amount (₹)</label>
                 <input
                   type="number"
                   value={amount}
                   onChange={(e) => setAmount(Number(e.target.value))}
-                  className="w-full px-3 py-2 text-xs rounded-lg border border-input bg-background font-mono"
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-border bg-card dark:bg-[#111622] text-foreground font-mono focus:ring-2 focus:ring-primary focus:outline-none"
                 />
               </div>
 
+              {/* Merchant Dropdown / Custom Selector */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-foreground block">Merchant ID</label>
-                <input
-                  type="text"
-                  value={merchant}
-                  onChange={(e) => setMerchant(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-lg border border-input bg-background font-mono"
-                />
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-foreground block flex items-center gap-1">
+                    <Store className="h-3.5 w-3.5 text-primary" />
+                    <span>Merchant ID</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCustomMerchant(!isCustomMerchant);
+                      if (!isCustomMerchant) setMerchant("");
+                      else setMerchant("mid_figma_01");
+                    }}
+                    className="text-[10px] text-primary hover:underline font-semibold"
+                  >
+                    {isCustomMerchant ? "Use Presets" : "Custom ID"}
+                  </button>
+                </div>
+
+                {!isCustomMerchant ? (
+                  <div className="relative">
+                    <select
+                      value={merchant}
+                      onChange={(e) => handleMerchantSelect(e.target.value)}
+                      className="w-full appearance-none pl-3 pr-8 py-2 text-xs rounded-lg border border-border bg-card dark:bg-[#111622] text-foreground font-mono font-medium focus:ring-2 focus:ring-primary focus:outline-none cursor-pointer"
+                    >
+                      {PRESET_MERCHANTS.map((m) => (
+                        <option
+                          key={m.id}
+                          value={m.id}
+                          className="bg-card text-foreground dark:bg-[#0B0F19] dark:text-zinc-100 py-1"
+                        >
+                          {m.name} ({m.id})
+                        </option>
+                      ))}
+                      <option value="custom" className="bg-card text-foreground dark:bg-[#0B0F19] font-bold">
+                        ✏️ Custom / Manual Merchant ID...
+                      </option>
+                    </select>
+                    <ChevronDown className="h-4 w-4 text-muted-foreground absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    placeholder="e.g. mid_custom_vendor"
+                    value={merchant}
+                    onChange={(e) => setMerchant(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-border bg-card dark:bg-[#111622] text-foreground font-mono focus:ring-2 focus:ring-primary focus:outline-none"
+                  />
+                )}
               </div>
 
+              {/* MCC Code Dropdown / Custom Selector */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-foreground block">MCC Code</label>
-                <input
-                  type="text"
-                  value={mcc}
-                  onChange={(e) => setMcc(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-lg border border-input bg-background font-mono"
-                />
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-foreground block flex items-center gap-1">
+                    <Tag className="h-3.5 w-3.5 text-primary" />
+                    <span>MCC Code</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCustomMcc(!isCustomMcc);
+                      if (!isCustomMcc) setMcc("");
+                      else setMcc("5734");
+                    }}
+                    className="text-[10px] text-primary hover:underline font-semibold"
+                  >
+                    {isCustomMcc ? "Use Presets" : "Custom MCC"}
+                  </button>
+                </div>
+
+                {!isCustomMcc ? (
+                  <div className="relative">
+                    <select
+                      value={mcc}
+                      onChange={(e) => handleMccSelect(e.target.value)}
+                      className="w-full appearance-none pl-3 pr-8 py-2 text-xs rounded-lg border border-border bg-card dark:bg-[#111622] text-foreground font-mono font-medium focus:ring-2 focus:ring-primary focus:outline-none cursor-pointer"
+                    >
+                      {PRESET_MCCS.map((m) => (
+                        <option
+                          key={m.code}
+                          value={m.code}
+                          className="bg-card text-foreground dark:bg-[#0B0F19] dark:text-zinc-100 py-1"
+                        >
+                          {m.status === "ALLOWED" ? "🟢" : "🔴"} {m.label}
+                        </option>
+                      ))}
+                      <option value="custom" className="bg-card text-foreground dark:bg-[#0B0F19] font-bold">
+                        ✏️ Custom / Manual MCC Code...
+                      </option>
+                    </select>
+                    <ChevronDown className="h-4 w-4 text-muted-foreground absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    placeholder="e.g. 5734"
+                    value={mcc}
+                    onChange={(e) => setMcc(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-border bg-card dark:bg-[#111622] text-foreground font-mono focus:ring-2 focus:ring-primary focus:outline-none"
+                  />
+                )}
               </div>
             </div>
 
