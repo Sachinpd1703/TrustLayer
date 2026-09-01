@@ -20091,13 +20091,39 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       };
     }
     if (name === "get_policy_limits") {
-      const res = await fetchWithTimeout(`${API_BASE_URL}/api/v1/policies`);
-      const data = await res.json();
+      const agentId = args.agent_id ? String(args.agent_id) : void 0;
+      const policyRes = await fetchWithTimeout(`${API_BASE_URL}/api/v1/policies`);
+      const policyData = await policyRes.json();
+      let agentData = null;
+      if (agentId) {
+        try {
+          const agentsRes = await fetchWithTimeout(`${API_BASE_URL}/api/v1/agents`);
+          const allAgents = await agentsRes.json();
+          if (Array.isArray(allAgents)) {
+            agentData = allAgents.find((a) => a.agentId === agentId) || null;
+          }
+        } catch {
+        }
+      }
+      const responsePayload = {
+        activePolicy: policyData,
+        agentProfile: agentData ? {
+          agentId: agentData.agentId,
+          name: agentData.name,
+          department: agentData.department?.name || "General",
+          departmentCode: agentData.department?.code || "GENERAL",
+          status: agentData.status,
+          perOrderCapInr: agentData.maxPerOrderCap / 100,
+          dailyCapInr: agentData.dailySpendCap / 100,
+          monthlyBudgetInr: agentData.monthlyBudgetCap / 100,
+          totalSpentInr: (agentData.totalSpentPaise || 0) / 100
+        } : null
+      };
       return {
         content: [
           {
             type: "text",
-            text: JSON.stringify(data, null, 2)
+            text: JSON.stringify(responsePayload, null, 2)
           }
         ]
       };
