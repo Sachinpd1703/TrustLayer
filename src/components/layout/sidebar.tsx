@@ -118,11 +118,14 @@ export function Sidebar() {
           </div>
 
           {/* Desktop Section Header & Toggle */}
-          <div className="hidden lg:flex items-center justify-between px-4 pt-4 pb-2">
+          <div className={cn(
+            "hidden lg:flex items-center pt-4 pb-2 relative transition-all duration-300",
+            isCollapsed ? "justify-center px-2" : "justify-center px-4"
+          )}>
             <p
               className={cn(
-                "text-[10px] font-bold uppercase tracking-wider text-muted-foreground transition-all duration-300 whitespace-nowrap overflow-hidden",
-                isCollapsed ? "opacity-0 w-0" : "opacity-100 w-auto"
+                "text-[10px] font-bold uppercase tracking-wider text-muted-foreground text-center transition-all duration-300 whitespace-nowrap overflow-hidden",
+                isCollapsed ? "opacity-0 w-0" : "opacity-100 flex-1"
               )}
             >
               Control Plane
@@ -130,7 +133,10 @@ export function Sidebar() {
             <button
               type="button"
               onClick={toggleCollapse}
-              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors ml-auto"
+              className={cn(
+                "p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors",
+                isCollapsed ? "" : "absolute right-3"
+              )}
               title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
               aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
@@ -161,7 +167,7 @@ export function Sidebar() {
                       : "text-muted-foreground hover:bg-secondary/70 hover:text-foreground"
                   )}
                 >
-                  <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
                     <Icon
                       className={cn(
                         "h-4 w-4 flex-shrink-0 transition-transform duration-200 group-hover:scale-110",
@@ -174,8 +180,8 @@ export function Sidebar() {
                     {/* Animated label */}
                     <span
                       className={cn(
-                        "whitespace-nowrap overflow-hidden transition-all duration-300 ease-in-out",
-                        isCollapsed ? "lg:max-w-0 lg:opacity-0" : "max-w-[180px] opacity-100"
+                        "whitespace-nowrap overflow-hidden transition-all duration-300 ease-in-out truncate",
+                        isCollapsed ? "lg:max-w-0 lg:opacity-0" : "max-w-[170px] opacity-100"
                       )}
                     >
                       {item.label}
@@ -186,8 +192,8 @@ export function Sidebar() {
                   {item.badge && (
                     <span
                       className={cn(
-                        "text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-full transition-all duration-300",
-                        isCollapsed ? "hidden" : "inline-block",
+                        "text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-full transition-all duration-300 whitespace-nowrap flex-shrink-0 ml-1.5",
+                        isCollapsed ? "hidden" : "inline-flex items-center",
                         isActive
                           ? "bg-primary-foreground/20 text-primary-foreground"
                           : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"

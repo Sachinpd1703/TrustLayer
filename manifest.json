@@ -2,8 +2,8 @@
   "manifest_version": "0.1",
   "name": "trustlayer",
   "display_name": "TrustLayer Razorpay Gateway",
-  "version": "0.2.2",
-  "description": "Autonomous financial firewall and policy gateway for Razorpay agentic commerce.",
+  "version": "0.3.0",
+  "description": "Autonomous financial firewall and policy gateway for Razorpay agentic commerce, SaaS seat reconciler, and virtual cards.",
   "author": {
     "name": "TrustLayer Team",
     "url": "https://github.com/Sachinpd1703/TrustLayer"
@@ -18,15 +18,23 @@
   "tools": [
     {
       "name": "propose_razorpay_payment",
-      "description": "Proposes an autonomous purchase or payment on Razorpay through TrustLayer spend guardrails."
+      "description": "Proposes an autonomous purchase, SaaS license seat renewal, or vendor payment on Razorpay with employee beneficiary metadata and single-use virtual cards."
     },
     {
       "name": "get_policy_limits",
-      "description": "Retrieves active spending limits, velocity caps, and approved vendor allowlists."
+      "description": "Retrieves active spending limits, velocity caps, department profile, and approved vendor allowlists."
     },
     {
       "name": "get_merchant_catalog",
       "description": "Retrieves the machine-readable e-commerce & SaaS catalog of verified merchants for AI Buyers."
+    },
+    {
+      "name": "list_active_subscriptions",
+      "description": "Lists all active SaaS subscriptions, provisioned employee seats, monthly costs, and renewal dates."
+    },
+    {
+      "name": "reconcile_zombie_seats",
+      "description": "Scans SaaS subscriptions to detect inactive/orphaned seats and calculate monthly cost savings prior to renewal."
     }
   ]
 }
