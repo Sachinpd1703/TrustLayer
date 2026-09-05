@@ -12,7 +12,9 @@ import {
   Radio, 
   ChevronDown,
   Lock,
-  Cpu
+  Cpu,
+  Building2,
+  Sparkles
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ThemeToggle } from "./theme-toggle";
@@ -70,17 +72,37 @@ export function Header() {
           </Link>
         </div>
 
+        {/* Center/Tenant Badge: Enterprise Multi-Tenant Workspace */}
+        <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl border border-border/80 bg-secondary/40 backdrop-blur-sm shadow-xs">
+          <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-primary/10 border border-primary/20 text-primary">
+            <Building2 className="h-3.5 w-3.5" />
+          </div>
+          <div className="flex flex-col text-left">
+            <div className="flex items-center gap-1.5">
+              <span className="font-semibold text-xs text-foreground leading-none">
+                Acme Corp
+              </span>
+              <span className="text-[9px] uppercase font-bold px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 leading-tight">
+                Active
+              </span>
+            </div>
+            <span className="text-[10px] text-muted-foreground leading-tight mt-0.5">
+              Production Workspace
+            </span>
+          </div>
+        </div>
+
         {/* Right: Environment Badge, Actions & Operator Profile */}
         <div className="flex items-center gap-2 md:gap-3">
           
-          {/* Razorpay Test Mode Live Badge */}
+          {/* Environment Status Badge */}
           <div className="flex items-center gap-2 px-2.5 md:px-3 py-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-medium shadow-sm">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
             </span>
-            <span className="hidden sm:inline">Razorpay Test Mode</span>
-            <span className="sm:hidden text-[10px] font-bold">TEST</span>
+            <span className="hidden sm:inline">Sandbox (Razorpay Test)</span>
+            <span className="sm:hidden text-[10px] font-bold">SANDBOX</span>
           </div>
 
           {/* Quick Simulator Link */}
@@ -107,7 +129,7 @@ export function Header() {
                 <UserCheck className="h-4 w-4" />
               </div>
               <span className="text-xs font-medium hidden md:inline-block pr-1">
-                Admin
+                Acme Admin
               </span>
               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground hidden md:inline-block" />
             </button>
@@ -122,15 +144,23 @@ export function Header() {
                   className="absolute right-0 mt-2 w-64 rounded-xl bg-card border border-border shadow-2xl p-3 z-50 text-xs"
                 >
                   <div className="pb-2.5 mb-2 border-b border-border">
-                    <p className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground">
-                      Security Officer
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground">
+                        Enterprise Tenant
+                      </p>
+                      <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+                        SOC 2 Type II
+                      </span>
+                    </div>
+                    <p className="font-semibold text-sm text-foreground mt-0.5">
+                      Acme Corporation
                     </p>
-                    <p className="font-semibold text-sm text-foreground">
-                      gateway-admin@trustlayer.local
+                    <p className="text-[11px] text-muted-foreground">
+                      admin@acme-corp.internal
                     </p>
                     <div className="flex items-center gap-1.5 mt-1.5 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
                       <Radio className="h-3 w-3 animate-pulse" />
-                      <span>Edge Node: Active (SOC 2 Mode)</span>
+                      <span>Edge Gateway: Active & Healthy</span>
                     </div>
                   </div>
 
@@ -190,3 +220,4 @@ export function Header() {
     </header>
   );
 }
+

@@ -7,6 +7,37 @@ generator client {
 }
 
 // --------------------------------------------------------
+// --------------------------------------------------------
+// 0. Multi-Tenant Enterprise Organization & User Hierarchy
+// --------------------------------------------------------
+model Organization {
+  id           String        @id @default(uuid())
+  name         String
+  slug         String        @unique
+  logoUrl      String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  
+  agents       Agent[]
+  policies     PolicyRule[]
+  users        User[]
+  transactions Transaction[]
+}
+
+model User {
+  id             String        @id @default(uuid())
+  email          String        @unique
+  name           String?
+  role           String        @default("ADMIN")
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([organizationId])
+}
+
+// --------------------------------------------------------
 // 1. Department & Organization Hierarchy
 // --------------------------------------------------------
 enum DepartmentRole {
@@ -49,6 +80,8 @@ model Agent {
   ownerEmail       String
   departmentId     String?
   department       Department?       @relation(fields: [departmentId], references: [id])
+  organizationId   String?
+  organization     Organization?     @relation(fields: [organizationId], references: [id])
   
   // Financial Caps (in Paise)
   maxPerOrderCap   Int               @default(500000)   // ₹5,000 auto-allow threshold
@@ -68,6 +101,7 @@ model Agent {
   @@index([agentId])
   @@index([status])
   @@index([departmentId])
+  @@index([organizationId])
 }
 
 model AgentToken {
@@ -89,40 +123,43 @@ model AgentToken {
 // 3. Multi-Tier Hierarchical Spend Policies
 // --------------------------------------------------------
 model PolicyRule {
-  id                   String      @id @default(cuid())
-  name                 String      @unique // e.g. "GlobalEnterpriseSaaSPolicy"
+  id                   String        @id @default(cuid())
+  name                 String        @unique // e.g. "GlobalEnterpriseSaaSPolicy"
   description          String?
-  isActive             Boolean     @default(true)
+  isActive             Boolean       @default(true)
   departmentId         String?
-  department           Department? @relation(fields: [departmentId], references: [id])
+  department           Department?   @relation(fields: [departmentId], references: [id])
+  organizationId       String?
+  organization         Organization? @relation(fields: [organizationId], references: [id])
   
   // Multi-Tier Spend Thresholds (in Paise)
-  tier1MaxOrderPaise   Int         @default(500000)   // Tier 1: Auto-Allow (<= ₹5,000)
-  tier2ThresholdPaise  Int         @default(2500000)  // Tier 2: Single Manager (<= ₹25,000)
-  tier3ThresholdPaise  Int         @default(10000000) // Tier 3: Dual-Custody (<= ₹1,00,000)
-  hardCeilingPaise     Int         @default(10000000) // Tier 4: Absolute Block (> ₹1,00,000)
-  dailySpendLimitPaise Int         @default(2000000)  // Rolling 24h limit (₹20,000)
+  tier1MaxOrderPaise   Int           @default(500000)   // Tier 1: Auto-Allow (<= ₹5,000)
+  tier2ThresholdPaise  Int           @default(2500000)  // Tier 2: Single Manager (<= ₹25,000)
+  tier3ThresholdPaise  Int           @default(10000000) // Tier 3: Dual-Custody (<= ₹1,00,000)
+  hardCeilingPaise     Int           @default(10000000) // Tier 4: Absolute Block (> ₹1,00,000)
+  dailySpendLimitPaise Int           @default(2000000)  // Rolling 24h limit (₹20,000)
   
   // Whitelists & Blocklists
-  allowedCurrencies    String[]    @default(["INR"])
-  allowedMccs          String[]    @default(["5734", "7372", "4816", "7011", "4511"])
-  blockedMccs          String[]    @default(["6051", "7995", "4829"])
-  allowedMerchants     String[]    @default(["mid_slack_01", "mid_figma_01", "mid_aws_01", "mid_github_01", "mid_cloudflare_01", "mid_taj_hotels", "mid_indigo_air"])
+  allowedCurrencies    String[]      @default(["INR"])
+  allowedMccs          String[]      @default(["5734", "7372", "4816", "7011", "4511"])
+  blockedMccs          String[]      @default(["6051", "7995", "4829"])
+  allowedMerchants     String[]      @default(["mid_slack_01", "mid_figma_01", "mid_aws_01", "mid_github_01", "mid_cloudflare_01", "mid_taj_hotels", "mid_indigo_air"])
   
   // Temporal Guardrails (Working Hours)
-  enforceWorkingHours  Boolean     @default(false)
-  workingDays          String[]    @default(["MON", "TUE", "WED", "THU", "FRI"])
-  startHourUtc         Int         @default(3)        // 08:30 AM IST (03:00 UTC)
-  endHourUtc           Int         @default(14)       // 07:30 PM IST (14:00 UTC)
+  enforceWorkingHours  Boolean       @default(false)
+  workingDays          String[]      @default(["MON", "TUE", "WED", "THU", "FRI"])
+  startHourUtc         Int           @default(3)        // 08:30 AM IST (03:00 UTC)
+  endHourUtc           Int           @default(14)       // 07:30 PM IST (14:00 UTC)
   
   // Risk Scoring Sensitivity
-  riskScoreThreshold   Float       @default(0.35)
+  riskScoreThreshold   Float         @default(0.35)
   
-  createdAt            DateTime    @default(now())
-  updatedAt            DateTime    @default(now()) @updatedAt
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @default(now()) @updatedAt
 
   @@index([isActive])
   @@index([departmentId])
+  @@index([organizationId])
 }
 
 // --------------------------------------------------------
@@ -162,6 +199,8 @@ model Transaction {
   riskScore           Float                @default(0.1)
   rawRequestPayload   Json                 // Postgres native JSONB
   rawResponsePayload  Json?                // Postgres native JSONB
+  organizationId      String?
+  organization        Organization?        @relation(fields: [organizationId], references: [id])
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @default(now()) @updatedAt
 
@@ -175,7 +214,9 @@ model Transaction {
   @@index([status])
   @@index([razorpayOrderId])
   @@index([createdAt])
+  @@index([organizationId])
 }
+
 
 // --------------------------------------------------------
 // 5. Employee Beneficiary & License Metadata
