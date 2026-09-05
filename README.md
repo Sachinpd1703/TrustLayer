@@ -94,11 +94,12 @@ TrustLayer includes a built-in AI Agent Simulator (`/simulator`) to test the 3 p
 
 ## Specifications & Architecture Blueprint
 
-Complete engineering specifications are available in [`docs/specifications/`](file:///C:/Users/sachi/Desktop/TrustLayer/docs/specifications/):
-* [`01-product-requirements-document.md`](file:///C:/Users/sachi/Desktop/TrustLayer/docs/specifications/01-product-requirements-document.md)
-* [`02-technical-requirements-document.md`](file:///C:/Users/sachi/Desktop/TrustLayer/docs/specifications/02-technical-requirements-document.md)
-* [`03-app-flow-document.md`](file:///C:/Users/sachi/Desktop/TrustLayer/docs/specifications/03-app-flow-document.md)
-* [`04-ui-ux-design-brief.md`](file:///C:/Users/sachi/Desktop/TrustLayer/docs/specifications/04-ui-ux-design-brief.md)
-* [`05-backend-schema-document.md`](file:///C:/Users/sachi/Desktop/TrustLayer/docs/specifications/05-backend-schema-document.md)
-* [`06-implementation-plan.md`](file:///C:/Users/sachi/Desktop/TrustLayer/docs/specifications/06-implementation-plan.md)
-* [`07-repository-architecture-and-folder-structure.md`](file:///C:/Users/sachi/Desktop/TrustLayer/docs/specifications/07-repository-architecture-and-folder-structure.md)
+Complete engineering specifications are available in [`docs/specifications/`](docs/specifications/):
+* [`01-product-requirements-document.md`](docs/specifications/01-product-requirements-document.md)
+* [`02-technical-requirements-document.md`](docs/specifications/02-technical-requirements-document.md)
+* [`03-app-flow-document.md`](docs/specifications/03-app-flow-document.md)
+* [`04-ui-ux-design-brief.md`](docs/specifications/04-ui-ux-design-brief.md)
+* [`05-backend-schema-document.md`](docs/specifications/05-backend-schema-document.md)
+* [`06-implementation-plan.md`](docs/specifications/06-implementation-plan.md)
+* [`07-repository-architecture-and-folder-structure.md`](docs/specifications/07-repository-architecture-and-folder-structure.md)
+

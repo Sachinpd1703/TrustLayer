@@ -16,6 +16,8 @@ const WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET || "tl_whsec_test_dem
 export async function POST(req: NextRequest) {
   try {
     const rawBody = await req.text();
+    const signature = req.headers.get("x-razorpay-signature");
+
     // 1. Verify HMAC-SHA256 Signature
     if (!signature) {
       if (process.env.NODE_ENV === "production") {
