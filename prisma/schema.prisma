@@ -58,6 +58,7 @@ model Agent {
   
   tokens           AgentToken[]
   transactions     Transaction[]
+  virtualCards     VirtualCard[]
   approvals        PendingApproval[]
   auditLogs        AuditLog[]
   
@@ -106,7 +107,7 @@ model PolicyRule {
   allowedCurrencies    String[]    @default(["INR"])
   allowedMccs          String[]    @default(["5734", "7372", "4816", "7011", "4511"])
   blockedMccs          String[]    @default(["6051", "7995", "4829"])
-  allowedMerchants     String[]    @default(["mid_slack_01", "mid_figma_01", "mid_aws_01", "mid_github_01", "mid_cloudflare_01"])
+  allowedMerchants     String[]    @default(["mid_slack_01", "mid_figma_01", "mid_aws_01", "mid_github_01", "mid_cloudflare_01", "mid_taj_hotels", "mid_indigo_air"])
   
   // Temporal Guardrails (Working Hours)
   enforceWorkingHours  Boolean     @default(false)
@@ -142,28 +143,30 @@ enum TransactionStatus {
 }
 
 model Transaction {
-  id                  String             @id @default(cuid())
+  id                  String               @id @default(cuid())
   agentId             String
-  agent               Agent              @relation(fields: [agentId], references: [agentId])
-  amountPaise         Int                // e.g. 160000 (₹1,600)
-  currency            String             @default("INR")
-  merchantId          String             // Target Razorpay Merchant ID
-  merchantCategory    String?            // e.g. "SaaS_Subscription"
-  mccCode             String?            // e.g. "5734"
-  intent              String             // Human-readable declared intent
-  reasoningHash       String             // SHA256 of LLM reasoning payload
-  reasoningText       String?            // Detailed reasoning string
-  decision            DecisionType       @default(ALLOW)
-  decisionReason      String             // e.g. "Auto-approved within spend cap"
-  razorpayOrderId     String?            // e.g. "order_RZP10293847"
+  agent               Agent                @relation(fields: [agentId], references: [agentId])
+  amountPaise         Int                  // e.g. 160000 (₹1,600)
+  currency            String               @default("INR")
+  merchantId          String               // Target Razorpay Merchant ID
+  merchantCategory    String?              // e.g. "SaaS_Subscription"
+  mccCode             String?              // e.g. "5734"
+  intent              String               // Human-readable declared intent
+  reasoningHash       String               // SHA256 of LLM reasoning payload
+  reasoningText       String?              // Detailed reasoning string
+  decision            DecisionType         @default(ALLOW)
+  decisionReason      String               // e.g. "Auto-approved within spend cap"
+  razorpayOrderId     String?              // e.g. "order_RZP10293847"
   razorpayPaymentId   String?
-  status              TransactionStatus  @default(PENDING)
-  riskScore           Float              @default(0.1)
-  rawRequestPayload   Json               // Postgres native JSONB
-  rawResponsePayload  Json?              // Postgres native JSONB
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @default(now()) @updatedAt
+  status              TransactionStatus    @default(PENDING)
+  riskScore           Float                @default(0.1)
+  rawRequestPayload   Json                 // Postgres native JSONB
+  rawResponsePayload  Json?                // Postgres native JSONB
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @default(now()) @updatedAt
 
+  beneficiary         BeneficiaryMetadata?
+  virtualCard         VirtualCard?
   pendingApproval     PendingApproval?
   auditLogs           AuditLog[]
 
@@ -175,7 +178,101 @@ model Transaction {
 }
 
 // --------------------------------------------------------
-// 5. Human Step-Up Approvals Queue (Dual-Custody)
+// 5. Employee Beneficiary & License Metadata
+// --------------------------------------------------------
+enum ProvisioningStatus {
+  PENDING
+  ACTIVE
+  REVOKED
+  CANCELLED
+}
+
+model BeneficiaryMetadata {
+  id                 String             @id @default(cuid())
+  transactionId      String             @unique
+  transaction        Transaction        @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  employeeEmail      String             // e.g. "rohit.sharma@enterprise.internal"
+  employeeName       String?            // e.g. "Rohit Sharma"
+  employeeId         String?            // e.g. "EMP_1042"
+  departmentCode     String?            // e.g. "ENGINEERING"
+  workspaceId        String?            // e.g. "figma_org_techventure"
+  licenseType        String?            // e.g. "FIGMA_DESIGN_EDITOR", "SLACK_PRO_SEAT"
+  provisioningStatus ProvisioningStatus @default(PENDING)
+  provisionedAt      DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @default(now()) @updatedAt
+
+  @@index([employeeEmail])
+  @@index([provisioningStatus])
+}
+
+// --------------------------------------------------------
+// 6. Ephemeral Single-Use Virtual Cards (10-Minute TTL)
+// --------------------------------------------------------
+enum VirtualCardStatus {
+  ACTIVE
+  CHARGED
+  EXPIRED
+  TERMINATED
+}
+
+model VirtualCard {
+  id                String            @id @default(cuid())
+  agentId           String
+  agent             Agent             @relation(fields: [agentId], references: [agentId])
+  transactionId     String?           @unique
+  transaction       Transaction?      @relation(fields: [transactionId], references: [id])
+  cardToken         String            @unique // Tokenized reference
+  maskedPan         String            // e.g. "4111-XXXX-XXXX-8921"
+  cardholderName    String            @default("TrustLayer AI Autonomous Buyer")
+  currency          String            @default("INR")
+  spendLimitPaise   Int               // Exact single-use authorization cap
+  currentSpentPaise Int               @default(0)
+  status            VirtualCardStatus @default(ACTIVE)
+  expiresAt         DateTime          // 10-minute TTL
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @default(now()) @updatedAt
+
+  @@index([agentId])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+// --------------------------------------------------------
+// 7. SaaS Subscriptions & Active Seat Directory
+// --------------------------------------------------------
+enum SeatStatus {
+  ACTIVE
+  INACTIVE
+  PENDING_PRUNING
+  CANCELLED
+}
+
+model SubscriptionSeat {
+  id                String     @id @default(cuid())
+  merchantId        String     // e.g. "mid_figma_01"
+  merchantName      String     // e.g. "Figma Design Platform"
+  sku               String     // e.g. "figma_dev_seat_monthly"
+  allocatedEmail    String     // e.g. "rohit.sharma@enterprise.internal"
+  allocatedName     String?    // e.g. "Rohit Sharma"
+  employeeId        String?    // e.g. "EMP_1042"
+  departmentCode    String?    // e.g. "ENGINEERING"
+  monthlyCostPaise  Int        // in paise (e.g. 80000 for ₹800)
+  status            SeatStatus @default(ACTIVE)
+  lastActivityDate  DateTime?  @default(now())
+  nextRenewalDate   DateTime
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @default(now()) @updatedAt
+
+  @@unique([merchantId, allocatedEmail])
+  @@index([merchantId])
+  @@index([allocatedEmail])
+  @@index([status])
+  @@index([nextRenewalDate])
+}
+
+// --------------------------------------------------------
+// 8. Human Step-Up Approvals Queue (Dual-Custody)
 // --------------------------------------------------------
 enum ApprovalStatus {
   PENDING
@@ -222,7 +319,7 @@ model PendingApproval {
 }
 
 // --------------------------------------------------------
-// 6. Tamper-Evident Hash-Chained Audit Ledger
+// 9. Tamper-Evident Hash-Chained Audit Ledger
 // --------------------------------------------------------
 model AuditLog {
   id                  String       @id @default(cuid())
@@ -246,7 +343,7 @@ model AuditLog {
 }
 
 // --------------------------------------------------------
-// 7. Omnichannel Webhook Integrations
+// 10. Omnichannel Webhook Integrations
 // --------------------------------------------------------
 enum WebhookChannel {
   TELEGRAM

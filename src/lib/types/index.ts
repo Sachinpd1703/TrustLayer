@@ -9,6 +9,15 @@ export type TransactionStatus =
   | "FAILED"
   | "REJECTED";
 
+export interface BeneficiaryPayload {
+  employeeEmail: string;
+  employeeName?: string;
+  employeeId?: string;
+  departmentCode?: string;
+  workspaceId?: string;
+  licenseType?: string;
+}
+
 export interface PolicyEvaluationBreakdown {
   spendCapCheck: "PASSED" | "EXCEEDED_REQUIRES_APPROVAL" | "EXCEEDED_HARD_CEILING";
   merchantWhitelistCheck: "PASSED" | "FAILED_UNAUTHORIZED_MERCHANT";
@@ -43,11 +52,18 @@ export interface DecisionResult {
   evaluation: PolicyEvaluationBreakdown;
   approvalId?: string;
   razorpayOrderId?: string;
+  virtualCardId?: string;
 }
 
 export interface LiveStreamEvent {
   id: string;
-  type: "TRANSACTION_PROPOSAL" | "APPROVAL_DECISION" | "KILL_SWITCH_TRIGGERED" | "AGENT_PROVISIONED";
+  type:
+    | "TRANSACTION_PROPOSAL"
+    | "APPROVAL_DECISION"
+    | "KILL_SWITCH_TRIGGERED"
+    | "AGENT_PROVISIONED"
+    | "LICENSE_PROVISIONED"
+    | "VIRTUAL_CARD_MINTED";
   timestamp: string;
   agentId: string;
   amountPaise: number;

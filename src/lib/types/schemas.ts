@@ -1,17 +1,32 @@
 import { z } from "zod";
 
-// 1. Agent Payment Proposal Schema
+// 1. Beneficiary Employee Identity Schema
+export const BeneficiarySchema = z.object({
+  employeeEmail: z.string().email("Valid employee corporate email required"),
+  employeeName: z.string().optional(),
+  employeeId: z.string().optional(),
+  departmentCode: z.string().optional(),
+  workspaceId: z.string().optional(),
+  licenseType: z.string().optional(),
+});
+
+export type BeneficiaryInput = z.infer<typeof BeneficiarySchema>;
+
+// 2. Agent Payment Proposal Schema
 export const ProposePaymentSchema = z.object({
   agentId: z.string().min(2, "Agent ID is required"),
   intent: z.string().min(3, "Declared intent is required"),
   reasoningText: z.string().optional(),
   reasoningHash: z.string().regex(/^sha256:[a-f0-9]{64}$/i, "Must be a valid SHA-256 hash formatted as sha256:..."),
+  beneficiary: BeneficiarySchema.optional(),
   orderPayload: z.object({
     amountPaise: z.number().int().positive("Amount must be positive in paise"),
     currency: z.string().default("INR"),
     merchantId: z.string().min(2, "Target Merchant ID is required"),
+    sku: z.string().optional(),
     category: z.string().default("General_SaaS"),
     mccCode: z.string().optional().default("5734"),
+    issueVirtualCard: z.boolean().optional().default(false),
     receipt: z.string().optional(),
     notes: z.record(z.string()).optional(),
   }),
@@ -19,7 +34,7 @@ export const ProposePaymentSchema = z.object({
 
 export type ProposePaymentInput = z.infer<typeof ProposePaymentSchema>;
 
-// 2. Human Approval Decision Schema
+// 3. Human Approval Decision Schema
 export const ApprovalDecisionSchema = z.object({
   decision: z.enum(["APPROVE", "REJECT"]),
   approverEmail: z.string().email("Valid approver email required"),
@@ -29,7 +44,7 @@ export const ApprovalDecisionSchema = z.object({
 
 export type ApprovalDecisionInput = z.infer<typeof ApprovalDecisionSchema>;
 
-// 3. Agent Registration & Provisioning Schema
+// 4. Agent Registration & Provisioning Schema
 export const RegisterAgentSchema = z.object({
   agentId: z.string().min(3, "Agent ID must be at least 3 characters"),
   name: z.string().min(2, "Agent Name is required"),
@@ -46,7 +61,7 @@ export const RegisterAgentSchema = z.object({
 
 export type RegisterAgentInput = z.infer<typeof RegisterAgentSchema>;
 
-// 4. Multi-Tier Policy Configuration Schema
+// 5. Multi-Tier Policy Configuration Schema
 export const PolicyRuleSchema = z.object({
   name: z.string().min(3, "Policy name must be at least 3 characters"),
   description: z.string().optional(),
@@ -66,6 +81,8 @@ export const PolicyRuleSchema = z.object({
     "mid_aws_01",
     "mid_github_01",
     "mid_cloudflare_01",
+    "mid_taj_hotels",
+    "mid_indigo_air",
   ]),
   enforceWorkingHours: z.boolean().default(false),
   workingDays: z.array(z.string()).default(["MON", "TUE", "WED", "THU", "FRI"]),
@@ -76,7 +93,7 @@ export const PolicyRuleSchema = z.object({
 
 export type PolicyRuleInput = z.infer<typeof PolicyRuleSchema>;
 
-// 5. Webhook Integration Schema
+// 6. Webhook Integration Schema
 export const WebhookIntegrationSchema = z.object({
   channel: z.enum(["TELEGRAM", "WHATSAPP", "SLACK", "CUSTOM_HTTP"]),
   name: z.string().min(2),

@@ -14,11 +14,11 @@ TrustLayer transforms from an **Autonomous Decision Gateway** into a **Full-Stac
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
 │                          TRUSTLAYER COMMERCIAL PLATFORM                                │
 ├──────────────────────────┬──────────────────────────┬──────────────────────────────────┤
-│ 💳 LAYER 1: CARDS & RAILS│ ⚖️ LAYER 2: POLICY & IAM │ 🔄 LAYER 3: SUBSCRIPTIONS & ERP  │
+│ LAYER 1: CARDS & RAILS   │ LAYER 2: POLICY & IAM    │  LAYER 3: SUBSCRIPTIONS & ERP    │
 ├──────────────────────────┼──────────────────────────┼──────────────────────────────────┤
 │ • Dynamic Virtual Cards  │ • Multi-Tenant RBAC/ABAC │ • Zombie SaaS Pruning            │
 │ • Single-Use 10-Min TTL  │ • Sub-50ms Edge Engine   │ • Seat Reconciliation            │
-│ • Escrow Pre-Funded Payout│ • Multi-Signatory HITL  │ • NetSuite / QuickBooks Sync    │
+│ • Escrow Pre-Funded Payout│ • Multi-Signatory HITL  │ • NetSuite / QuickBooks Sync     │
 │ • Razorpay Route Settlement│ • Tamper-Evident Ledger│ • Automated Chargeback Shield    │
 └──────────────────────────┴──────────────────────────┴──────────────────────────────────┘
 ```

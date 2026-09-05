@@ -6,6 +6,8 @@ import { VelocityTracker } from "@/lib/engine/velocity-tracker";
 import { EventBus } from "@/lib/events/event-bus";
 import { computeAuditLogHash, computeSha256 } from "@/lib/security/audit-chain";
 
+import { VendorProvisioner } from "@/lib/fulfillment/vendor-provisioner";
+
 export const dynamic = "force-dynamic";
 
 export async function POST(
@@ -28,7 +30,12 @@ export async function POST(
 
     const approval = await prisma.pendingApproval.findUnique({
       where: { id },
-      include: { transaction: true, agent: true },
+      include: {
+        transaction: {
+          include: { beneficiary: true },
+        },
+        agent: true,
+      },
     });
 
     if (!approval) {
@@ -168,6 +175,25 @@ export async function POST(
       where: { agentId: approval.agentId },
       data: { totalSpentPaise: { increment: approval.amountPaise } },
     });
+
+    // 3.1 If transaction had beneficiary metadata, activate SaaS license seat
+    if (approval.transaction.beneficiary) {
+      await VendorProvisioner.activateLicense({
+        transactionId: approval.transaction.id,
+        merchantId: approval.merchantId,
+        merchantName: approval.transaction.merchantCategory || "Verified SaaS Merchant",
+        sku: approval.transaction.beneficiary.licenseType || "seat_monthly",
+        amountPaise: approval.amountPaise,
+        beneficiary: {
+          employeeEmail: approval.transaction.beneficiary.employeeEmail,
+          employeeName: approval.transaction.beneficiary.employeeName || undefined,
+          employeeId: approval.transaction.beneficiary.employeeId || undefined,
+          departmentCode: approval.transaction.beneficiary.departmentCode || undefined,
+          workspaceId: approval.transaction.beneficiary.workspaceId || undefined,
+          licenseType: approval.transaction.beneficiary.licenseType || undefined,
+        },
+      });
+    }
 
     // 4. Append Audit Log for Approved Execution
     const lastLog = await prisma.auditLog.findFirst({

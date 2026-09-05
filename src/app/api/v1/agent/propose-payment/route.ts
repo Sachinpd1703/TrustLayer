@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { ProposePaymentSchema } from "@/lib/types/schemas";
-import { verifyAgentSignature, verifyAntiReplayNonce } from "@/lib/security/agent-auth";
 import { PolicyEvaluator } from "@/lib/engine/policy-evaluator";
+import { executeRazorpayOrder } from "@/lib/razorpay/client";
 import { computeAuditLogHash, computeSha256 } from "@/lib/security/audit-chain";
 import { VelocityTracker } from "@/lib/engine/velocity-tracker";
-import { executeRazorpayOrder } from "@/lib/razorpay/client";
 import { EventBus } from "@/lib/events/event-bus";
+import { VendorProvisioner } from "@/lib/fulfillment/vendor-provisioner";
+import { VirtualCardManager } from "@/lib/cards/virtual-card-manager";
 import { DecisionType, TransactionStatus, ApprovalTier } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -15,21 +16,21 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    // 1. Zod Schema Validation
+    // 1. Validate Input Payload
     const parsed = ProposePaymentSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
         {
-          error: "INVALID_PROPOSAL_PAYLOAD",
+          error: "INVALID_PROPOSAL_SCHEMA",
           details: parsed.error.format(),
         },
         { status: 400 }
       );
     }
 
-    const { agentId, intent, reasoningText, reasoningHash, orderPayload } = parsed.data;
+    const { agentId, intent, reasoningText, reasoningHash, orderPayload, beneficiary } = parsed.data;
 
-    // 2. Fetch Agent from Database
+    // 2. Fetch Agent Profile
     const agent = await prisma.agent.findUnique({
       where: { agentId },
       include: { department: true },
@@ -38,17 +39,17 @@ export async function POST(req: NextRequest) {
     if (!agent) {
       return NextResponse.json(
         {
-          error: "AGENT_NOT_REGISTERED",
-          message: `Agent '${agentId}' is not registered in TrustLayer IAM.`,
+          error: "AGENT_NOT_FOUND",
+          message: `Agent identity '${agentId}' is not registered in TrustLayer IAM registry.`,
         },
-        { status: 401 }
+        { status: 404 }
       );
     }
 
-    // 3. Emergency Kill-Switch & Status Gate
-    if (agent.status !== "ACTIVE") {
+    // 3. Immediate Kill-Switch Check
+    if (agent.status === "REVOKED" || agent.status === "SUSPENDED") {
       EventBus.broadcast({
-        id: `kill_${Date.now()}`,
+        id: `ev_${Date.now()}`,
         type: "KILL_SWITCH_TRIGGERED",
         timestamp: new Date().toISOString(),
         agentId,
@@ -57,24 +58,53 @@ export async function POST(req: NextRequest) {
         merchantId: orderPayload.merchantId,
         intent,
         decision: "DENY",
-        reason: `Agent '${agentId}' has been ${agent.status} by administrator.`,
+        reason: `Transaction blocked by emergency kill-switch. Agent '${agentId}' status is ${agent.status}.`,
         riskScore: 1.0,
       });
 
       return NextResponse.json(
         {
-          error: "AGENT_REVOKED",
-          message: `Agent '${agentId}' has been ${agent.status} by administrator. Kill-switch active.`,
-          status: "BLOCKED",
           decision: "DENY",
+          approvalTier: "TIER_DENY",
+          reason: `Agent identity '${agentId}' has been revoked/suspended. Financial access neutralized.`,
+          violations: ["AGENT_STATUS_REVOKED"],
+          evaluation: {
+            spendCapCheck: "EXCEEDED_HARD_CEILING",
+            merchantWhitelistCheck: "FAILED_UNAUTHORIZED_MERCHANT",
+            mccCheck: "FAILED_BLOCKED_MCC",
+            temporalCheck: "FLAGGED_AFTER_HOURS",
+            velocityCheck: "FAILED_VELOCITY_CAP_EXCEEDED",
+            budgetCheck: "EXCEEDED_MONTHLY_BUDGET",
+            currencyCheck: "FAILED_UNSUPPORTED_CURRENCY",
+            riskScoreCheck: "FLAGGED_HIGH_RISK",
+            details: {
+              requestedAmountPaise: orderPayload.amountPaise,
+              tier1MaxOrderPaise: 0,
+              tier2ThresholdPaise: 0,
+              tier3ThresholdPaise: 0,
+              hardCeilingPaise: 0,
+              rolling24hSpendPaise: 0,
+              dailySpendLimitPaise: 0,
+              agentTotalSpentPaise: Number(agent.totalSpentPaise),
+              agentMonthlyBudgetCap: agent.monthlyBudgetCap,
+              merchantId: orderPayload.merchantId,
+              mccCode: orderPayload.mccCode || "5734",
+              riskScore: 1.0,
+              approvalTier: "TIER_DENY",
+            },
+          },
         },
         { status: 403 }
       );
     }
 
-    // 4. Fetch Active Multi-Tier Policy
+    // 4. Fetch Active Policy
     let activePolicy = await prisma.policyRule.findFirst({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        OR: [{ departmentId: agent.departmentId }, { departmentId: null }],
+      },
+      orderBy: { createdAt: "desc" },
     });
 
     if (!activePolicy) {
@@ -95,6 +125,8 @@ export async function POST(req: NextRequest) {
             "mid_aws_01",
             "mid_github_01",
             "mid_cloudflare_01",
+            "mid_taj_hotels",
+            "mid_indigo_air",
           ],
           riskScoreThreshold: 0.35,
         },
@@ -138,22 +170,33 @@ export async function POST(req: NextRequest) {
     let transactionStatus: TransactionStatus = TransactionStatus.BLOCKED;
     let razorpayOrderId: string | undefined = undefined;
     let approvalId: string | undefined = undefined;
+    let issuedVirtualCard = null;
 
     // -------------------------------------------------------------
     // 6. EXECUTION ROUTING
     // -------------------------------------------------------------
     if (evaluation.decision === "ALLOW") {
+      // Auto-forward beneficiary metadata into Razorpay notes
+      const razorpayNotes: Record<string, string> = {
+        agentId,
+        intent,
+        merchantId: orderPayload.merchantId,
+        ...(orderPayload.notes || {}),
+      };
+
+      if (beneficiary) {
+        razorpayNotes.beneficiary_email = beneficiary.employeeEmail;
+        if (beneficiary.employeeId) razorpayNotes.employee_id = beneficiary.employeeId;
+        if (beneficiary.workspaceId) razorpayNotes.workspace_id = beneficiary.workspaceId;
+        if (beneficiary.licenseType) razorpayNotes.license_type = beneficiary.licenseType;
+      }
+
       // Execute Razorpay Order API
       const rzpOrder = await executeRazorpayOrder({
         amountPaise: orderPayload.amountPaise,
         currency: orderPayload.currency,
         receipt: orderPayload.receipt || `rcpt_${Date.now()}`,
-        notes: {
-          agentId,
-          intent,
-          merchantId: orderPayload.merchantId,
-          ...orderPayload.notes,
-        },
+        notes: razorpayNotes,
       });
 
       razorpayOrderId = rzpOrder.id;
@@ -171,6 +214,16 @@ export async function POST(req: NextRequest) {
           },
         },
       });
+
+      // Issue ephemeral Virtual Card if requested
+      if (orderPayload.issueVirtualCard) {
+        issuedVirtualCard = await VirtualCardManager.issueSingleUseCard({
+          agentId,
+          spendLimitPaise: orderPayload.amountPaise,
+          currency: orderPayload.currency,
+          cardholderName: `TrustLayer - ${agent.name}`,
+        });
+      }
     } else if (evaluation.decision === "REQUIRE_APPROVAL") {
       transactionStatus = TransactionStatus.PENDING;
     }
@@ -197,7 +250,36 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // 8. If Step-Up Approval Required -> Create PendingApproval Record
+    // 8. Attach Beneficiary Metadata if provided
+    if (beneficiary) {
+      await prisma.beneficiaryMetadata.create({
+        data: {
+          transactionId: transaction.id,
+          employeeEmail: beneficiary.employeeEmail,
+          employeeName: beneficiary.employeeName,
+          employeeId: beneficiary.employeeId,
+          departmentCode: beneficiary.departmentCode || agent.department?.code || "ENGINEERING",
+          workspaceId: beneficiary.workspaceId,
+          licenseType: beneficiary.licenseType || orderPayload.sku || "STANDARD_SEAT",
+          provisioningStatus: evaluation.decision === "ALLOW" ? "ACTIVE" : "PENDING",
+          provisionedAt: evaluation.decision === "ALLOW" ? new Date() : null,
+        },
+      });
+
+      // If auto-approved, trigger automatic license activation & seat upsert
+      if (evaluation.decision === "ALLOW") {
+        await VendorProvisioner.activateLicense({
+          transactionId: transaction.id,
+          merchantId: orderPayload.merchantId,
+          merchantName: orderPayload.category || "Verified SaaS Merchant",
+          sku: orderPayload.sku || "seat_monthly",
+          amountPaise: orderPayload.amountPaise,
+          beneficiary,
+        });
+      }
+    }
+
+    // 9. If Step-Up Approval Required -> Create PendingApproval Record
     if (evaluation.decision === "REQUIRE_APPROVAL") {
       const approvalTier: ApprovalTier =
         evaluation.approvalTier === "TIER_DUAL_CUSTODY"
@@ -220,7 +302,7 @@ export async function POST(req: NextRequest) {
       approvalId = approval.id;
     }
 
-    // 9. Append Hash-Chained Audit Record
+    // 10. Append Hash-Chained Audit Record
     const lastAudit = await prisma.auditLog.findFirst({
       orderBy: { logIndex: "desc" },
     });
@@ -247,15 +329,18 @@ export async function POST(req: NextRequest) {
         decision: evaluation.decision as DecisionType,
         intent,
         reasoningHash,
-        policyEvaluationJson: JSON.parse(JSON.stringify(evaluation.evaluation)),
+        policyEvaluationJson: {
+          ...evaluation.evaluation,
+          beneficiary: beneficiary || null,
+        },
         previousLogHash: prevHash,
         currentLogHash: currentHash,
       },
     });
 
-    // 10. Broadcast Real-Time Event via EventBus
+    // 11. Broadcast Real-Time SSE Event
     EventBus.broadcast({
-      id: transaction.id,
+      id: `ev_${Date.now()}`,
       type: "TRANSACTION_PROPOSAL",
       timestamp: transaction.createdAt.toISOString(),
       agentId,
@@ -269,58 +354,42 @@ export async function POST(req: NextRequest) {
       riskScore: evaluation.evaluation.details.riskScore,
     });
 
-    // 11. Return Response
-    if (evaluation.decision === "ALLOW") {
-      return NextResponse.json({
-        status: "EXECUTED",
-        decision: "ALLOW",
-        approvalTier: evaluation.approvalTier,
-        transactionId: transaction.id,
-        razorpayOrderId,
-        amountPaise: orderPayload.amountPaise,
-        currency: orderPayload.currency,
-        message: evaluation.reason,
-        policyEvaluation: evaluation.evaluation,
-      });
-    }
-
-    if (evaluation.decision === "REQUIRE_APPROVAL") {
-      return NextResponse.json(
-        {
-          status: "PENDING_APPROVAL",
-          decision: "REQUIRE_APPROVAL",
-          approvalTier: evaluation.approvalTier,
-          transactionId: transaction.id,
-          approvalId,
-          amountPaise: orderPayload.amountPaise,
-          currency: orderPayload.currency,
-          message: evaluation.reason,
-          policyEvaluation: evaluation.evaluation,
-        },
-        { status: 202 }
-      );
-    }
+    // 12. Return Standard Response
+    const statusCode = evaluation.decision === "ALLOW" ? 200 : evaluation.decision === "REQUIRE_APPROVAL" ? 202 : 403;
 
     return NextResponse.json(
       {
-        status: "BLOCKED",
-        decision: "DENY",
-        approvalTier: evaluation.approvalTier,
         transactionId: transaction.id,
-        error_code: "POLICY_VIOLATION",
-        message: evaluation.reason,
+        decision: evaluation.decision,
+        approvalTier: evaluation.approvalTier,
+        reason: evaluation.reason,
         violations: evaluation.violations,
-        policyEvaluation: evaluation.evaluation,
+        razorpayOrderId,
+        approvalId,
+        virtualCard: issuedVirtualCard
+          ? {
+              cardToken: issuedVirtualCard.cardToken,
+              maskedPan: issuedVirtualCard.maskedPan,
+              spendLimitInr: issuedVirtualCard.spendLimitPaise / 100,
+              expiresAt: issuedVirtualCard.expiresAt,
+            }
+          : undefined,
+        beneficiary: beneficiary
+          ? {
+              email: beneficiary.employeeEmail,
+              provisioningStatus: evaluation.decision === "ALLOW" ? "ACTIVE" : "PENDING",
+            }
+          : undefined,
+        evaluation: evaluation.evaluation,
       },
-      { status: 403 }
+      { status: statusCode }
     );
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("Propose Payment Error:", err);
+  } catch (error: unknown) {
+    console.error("Critical Error in /api/v1/agent/propose-payment:", error);
+    const msg = error instanceof Error ? error.message : "Internal PDP evaluation failure";
     return NextResponse.json(
       {
         error: "INTERNAL_GATEWAY_ERROR",
-        decision: "DENY",
         message: msg,
       },
       { status: 500 }

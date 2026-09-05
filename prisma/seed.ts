@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { PrismaClient, DepartmentRole } from "@prisma/client";
+import { PrismaClient, DepartmentRole, VirtualCardStatus, SeatStatus } from "@prisma/client";
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
 import crypto from "crypto";
@@ -19,12 +19,15 @@ function computeInitialHash(content: string): string {
 }
 
 async function main() {
-  console.log("🌱 Starting TrustLayer v0.2.2 Database Seeding (Supabase PostgreSQL)...");
+  console.log("🌱 Starting TrustLayer v0.3.0 Database Seeding (Supabase PostgreSQL)...");
 
   // 1. Clean existing records in reverse dependency order
   await prisma.auditLog.deleteMany({});
   await prisma.pendingApproval.deleteMany({});
+  await prisma.beneficiaryMetadata.deleteMany({});
+  await prisma.virtualCard.deleteMany({});
   await prisma.transaction.deleteMany({});
+  await prisma.subscriptionSeat.deleteMany({});
   await prisma.policyRule.deleteMany({});
   await prisma.agentToken.deleteMany({});
   await prisma.agent.deleteMany({});
@@ -140,6 +143,8 @@ async function main() {
         "mid_aws_01",
         "mid_github_01",
         "mid_cloudflare_01",
+        "mid_taj_hotels",
+        "mid_indigo_air",
       ],
       enforceWorkingHours: false,
       riskScoreThreshold: 0.35,
@@ -148,7 +153,85 @@ async function main() {
 
   console.log(`✅ Seeded Multi-Tier Policy: ${globalPolicy.name}`);
 
-  // 5. Seed Initial Historical Transaction
+  // 5. Seed SaaS Active Subscription Seats
+  const nextMonthDate = new Date();
+  nextMonthDate.setDate(nextMonthDate.getDate() + 30);
+
+  await prisma.subscriptionSeat.createMany({
+    data: [
+      {
+        merchantId: "mid_figma_01",
+        merchantName: "Figma Design Platform",
+        sku: "figma_dev_seat_monthly",
+        allocatedEmail: "rohit.sharma@enterprise.internal",
+        allocatedName: "Rohit Sharma",
+        employeeId: "EMP_1042",
+        departmentCode: "ENGINEERING",
+        monthlyCostPaise: 80000, // ₹800
+        status: SeatStatus.ACTIVE,
+        nextRenewalDate: nextMonthDate,
+      },
+      {
+        merchantId: "mid_figma_01",
+        merchantName: "Figma Design Platform",
+        sku: "figma_dev_seat_monthly",
+        allocatedEmail: "ananya.verma@enterprise.internal",
+        allocatedName: "Ananya Verma",
+        employeeId: "EMP_1088",
+        departmentCode: "MARKETING",
+        monthlyCostPaise: 80000, // ₹800
+        status: SeatStatus.ACTIVE,
+        nextRenewalDate: nextMonthDate,
+      },
+      {
+        merchantId: "mid_slack_01",
+        merchantName: "Slack Technologies",
+        sku: "slack_pro_user_monthly",
+        allocatedEmail: "vikram.patel@enterprise.internal",
+        allocatedName: "Vikram Patel",
+        employeeId: "EMP_1015",
+        departmentCode: "ENGINEERING",
+        monthlyCostPaise: 80000, // ₹800
+        status: SeatStatus.ACTIVE,
+        nextRenewalDate: nextMonthDate,
+      },
+      {
+        merchantId: "mid_figma_01",
+        merchantName: "Figma Design Platform",
+        sku: "figma_dev_seat_monthly",
+        allocatedEmail: "inactive.intern@enterprise.internal",
+        allocatedName: "Past Intern (Exited)",
+        employeeId: "EMP_9001",
+        departmentCode: "ENGINEERING",
+        monthlyCostPaise: 80000, // ₹800
+        status: SeatStatus.INACTIVE, // Zombie seat for reconciliation demo!
+        nextRenewalDate: nextMonthDate,
+      },
+    ],
+  });
+
+  console.log("✅ Seeded Active SaaS Subscription Seats (including inactive zombie seat for pruning demo).");
+
+  // 6. Seed Ephemeral Virtual Card
+  const cardExpiry = new Date();
+  cardExpiry.setMinutes(cardExpiry.getMinutes() + 10);
+
+  await prisma.virtualCard.create({
+    data: {
+      agentId: agent1.agentId,
+      cardToken: "tok_vc_rzp_984210",
+      maskedPan: "4111-XXXX-XXXX-8921",
+      cardholderName: "TrustLayer AI - DevOps Bot",
+      currency: "INR",
+      spendLimitPaise: 3500000, // ₹35,000 exact cap
+      status: VirtualCardStatus.ACTIVE,
+      expiresAt: cardExpiry,
+    },
+  });
+
+  console.log("✅ Seeded Ephemeral Single-Use Virtual Card with 10-min TTL.");
+
+  // 7. Seed Genesis Transaction with Beneficiary Metadata
   const genesisTxn = await prisma.transaction.create({
     data: {
       agentId: "agent_procure_v2",
@@ -169,6 +252,10 @@ async function main() {
         amount: 160000,
         currency: "INR",
         merchant: "mid_slack_01",
+        notes: {
+          beneficiary_email: "rohit.sharma@enterprise.internal",
+          employee_id: "EMP_1042",
+        },
       },
       rawResponsePayload: {
         id: "order_RZP10000001",
@@ -177,7 +264,22 @@ async function main() {
     },
   });
 
-  // 6. Create Genesis Audit Log
+  // Attach Beneficiary Metadata
+  await prisma.beneficiaryMetadata.create({
+    data: {
+      transactionId: genesisTxn.id,
+      employeeEmail: "rohit.sharma@enterprise.internal",
+      employeeName: "Rohit Sharma",
+      employeeId: "EMP_1042",
+      departmentCode: "ENGINEERING",
+      workspaceId: "slack_org_techventure",
+      licenseType: "SLACK_PRO_SEAT",
+      provisioningStatus: "ACTIVE",
+      provisionedAt: new Date(),
+    },
+  });
+
+  // 8. Create Genesis Audit Log
   const genesisHash = computeInitialHash("GENESIS_BLOCK_TRUSTLAYER_2026");
   const currentHash = computeInitialHash(
     `${genesisHash}|1|${genesisTxn.id}|agent_procure_v2|160000|ALLOW|${genesisTxn.reasoningHash}`
@@ -197,6 +299,7 @@ async function main() {
         merchantCheck: "PASSED",
         mccCheck: "PASSED",
         velocityCheck: "PASSED",
+        beneficiaryCheck: "PASSED",
         riskScoreCheck: "PASSED",
       },
       previousLogHash: genesisHash,
@@ -205,7 +308,7 @@ async function main() {
   });
 
   console.log("✅ Seeded Genesis Audit Block #1 with cryptographic hash verification.");
-  console.log("🎉 Seeding v0.2.2 completed successfully on Supabase PostgreSQL!");
+  console.log("🎉 Seeding v0.3.0 completed successfully on Supabase PostgreSQL!");
 }
 
 main()

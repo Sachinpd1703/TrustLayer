@@ -19977,7 +19977,7 @@ var API_BASE_URL = process.env.TRUSTLAYER_API_URL || "https://trust-layer-amber.
 var server = new Server(
   {
     name: "trustlayer-razorpay-gateway",
-    version: "0.2.2"
+    version: "0.3.0"
   },
   {
     capabilities: {
@@ -19990,13 +19990,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     tools: [
       {
         name: "propose_razorpay_payment",
-        description: "Proposes an autonomous purchase, subscription renewal, or vendor payment on Razorpay. The request is deterministically evaluated against active organizational spend caps, velocity limits, and MCC whitelists before execution.",
+        description: "Proposes an autonomous purchase, SaaS license seat renewal, or vendor payment on Razorpay. Supports automatic employee license provisioning and single-use virtual card minting.",
         inputSchema: {
           type: "object",
           properties: {
             intent: {
               type: "string",
-              description: "Human-readable intent explaining why the purchase is required (e.g. 'Renew 2 Figma developer seats for Q3')."
+              description: "Human-readable intent explaining why the purchase is required (e.g. 'Renew Figma Developer Seat for Rohit Sharma')."
             },
             reasoning: {
               type: "string",
@@ -20004,7 +20004,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             amount_paise: {
               type: "integer",
-              description: "Amount in INR Paise (e.g. 160000 for \u20B91,600.00)."
+              description: "Amount in INR Paise (e.g. 80000 for \u20B9800.00)."
             },
             merchant_id: {
               type: "string",
@@ -20017,6 +20017,22 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             mcc_code: {
               type: "string",
               description: "Optional ISO Merchant Category Code (e.g. '5734' for Software/SaaS, '7372' for Cloud Compute)."
+            },
+            beneficiary_email: {
+              type: "string",
+              description: "Optional corporate email of the employee to allocate the license/seat to (e.g. 'rohit.sharma@enterprise.internal')."
+            },
+            employee_name: {
+              type: "string",
+              description: "Optional employee full name (e.g. 'Rohit Sharma')."
+            },
+            employee_id: {
+              type: "string",
+              description: "Optional corporate employee ID (e.g. 'EMP_1042')."
+            },
+            issue_virtual_card: {
+              type: "boolean",
+              description: "Set true if a single-use 10-minute disposable Virtual Card is needed for checkout."
             }
           },
           required: ["intent", "reasoning", "amount_paise", "merchant_id"]
@@ -20042,6 +20058,22 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           type: "object",
           properties: {}
         }
+      },
+      {
+        name: "list_active_subscriptions",
+        description: "Lists all active SaaS subscriptions, provisioned employee seats, monthly costs, and renewal dates.",
+        inputSchema: {
+          type: "object",
+          properties: {}
+        }
+      },
+      {
+        name: "reconcile_zombie_seats",
+        description: "Scans SaaS subscriptions to detect inactive/orphaned seats and calculate monthly cost savings prior to renewal.",
+        inputSchema: {
+          type: "object",
+          properties: {}
+        }
       }
     ]
   };
@@ -20063,6 +20095,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const agentId = String(args.agent_id || "agent_procure_v2");
       const reasoning = String(args.reasoning || "");
       const reasoningHash = `sha256:${import_crypto.default.createHash("sha256").update(reasoning).digest("hex")}`;
+      const beneficiary = args.beneficiary_email ? {
+        employeeEmail: String(args.beneficiary_email),
+        employeeName: args.employee_name ? String(args.employee_name) : void 0,
+        employeeId: args.employee_id ? String(args.employee_id) : void 0
+      } : void 0;
       const res = await fetchWithTimeout(`${API_BASE_URL}/api/v1/agent/propose-payment`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -20071,12 +20108,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           intent: args.intent,
           reasoningText: reasoning,
           reasoningHash,
+          beneficiary,
           orderPayload: {
             amountPaise: Number(args.amount_paise),
             currency: "INR",
             merchantId: String(args.merchant_id),
             category: "Autonomous_Agentic_Commerce",
-            mccCode: String(args.mcc_code || "5734")
+            mccCode: String(args.mcc_code || "5734"),
+            issueVirtualCard: Boolean(args.issue_virtual_card)
           }
         })
       });
@@ -20130,6 +20169,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
     if (name === "get_merchant_catalog") {
       const res = await fetchWithTimeout(`${API_BASE_URL}/.well-known/ai-commerce.json`);
+      const data = await res.json();
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(data, null, 2)
+          }
+        ]
+      };
+    }
+    if (name === "list_active_subscriptions") {
+      const res = await fetchWithTimeout(`${API_BASE_URL}/api/v1/subscriptions`);
+      const data = await res.json();
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(data, null, 2)
+          }
+        ]
+      };
+    }
+    if (name === "reconcile_zombie_seats") {
+      const res = await fetchWithTimeout(`${API_BASE_URL}/api/v1/subscriptions/reconcile`);
       const data = await res.json();
       return {
         content: [
