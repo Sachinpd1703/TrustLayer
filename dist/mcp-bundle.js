@@ -19973,7 +19973,7 @@ var StdioServerTransport = class {
 
 // src/mcp/cli.ts
 var import_crypto = __toESM(require("crypto"));
-var API_BASE_URL = process.env.TRUSTLAYER_API_URL || "https://trust-layer-amber.vercel.app";
+var API_BASE_URL = process.env.TRUSTLAYER_API_URL || "http://localhost:3000";
 var server = new Server(
   {
     name: "trustlayer-razorpay-gateway",

@@ -1,45 +1,50 @@
-// In-Memory Sliding-Window Velocity Tracker (High-Performance Ring Buffer)
-
-interface VelocityEntry {
-  amountPaise: number;
-  timestamp: number;
-}
-
-const agentVelocityMap = new Map<string, VelocityEntry[]>();
+import { prisma } from "@/lib/db/prisma";
 
 export class VelocityTracker {
   /**
-   * Get total spend in paise for an agent within the last N milliseconds (e.g. 24 hours).
+   * Get total rolling spend in paise for an agent within the last N milliseconds (default: 24 hours).
+   * Aggregates directly from PostgreSQL Transaction records.
    */
-  static getRollingSpendPaise(agentId: string, windowMs = 86400000): number {
-    const now = Date.now();
-    const cutoff = now - windowMs;
-    const entries = agentVelocityMap.get(agentId) || [];
+  static async getRollingSpendPaise(
+    agentId: string,
+    windowMs = 86400000
+  ): Promise<number> {
+    const cutoff = new Date(Date.now() - windowMs);
+    const result = await prisma.transaction.aggregate({
+      where: {
+        agentId,
+        status: { in: ["EXECUTED", "PENDING"] },
+        createdAt: { gte: cutoff },
+      },
+      _sum: { amountPaise: true },
+    });
 
-    // Filter active window
-    const validEntries = entries.filter((e) => e.timestamp >= cutoff);
-    agentVelocityMap.set(agentId, validEntries);
+    return result._sum?.amountPaise || 0;
 
-    return validEntries.reduce((sum, e) => sum + e.amountPaise, 0);
-  }
-
-  /**
-   * Record a new successfully authorized/executed payment.
-   */
-  static recordSpend(agentId: string, amountPaise: number): void {
-    const now = Date.now();
-    const entries = agentVelocityMap.get(agentId) || [];
-    entries.push({ amountPaise, timestamp: now });
-    agentVelocityMap.set(agentId, entries);
   }
 
   /**
    * Get transaction request frequency (e.g. requests in the last 60 seconds).
    */
-  static getRecentRequestCount(agentId: string, windowMs = 60000): number {
-    const now = Date.now();
-    const cutoff = now - windowMs;
-    const entries = agentVelocityMap.get(agentId) || [];
-    return entries.filter((e) => e.timestamp >= cutoff).length;
+  static async getRecentRequestCount(
+    agentId: string,
+    windowMs = 60000
+  ): Promise<number> {
+    const cutoff = new Date(Date.now() - windowMs);
+    return await prisma.transaction.count({
+      where: {
+        agentId,
+        createdAt: { gte: cutoff },
+      },
+    });
+  }
+
+  /**
+   * Deprecated / legacy helper preserved for backward compatibility.
+   * Spend is recorded automatically in PostgreSQL via Prisma Transaction records.
+   */
+  static recordSpend(_agentId: string, _amountPaise: number): void {
+    // Database-backed transactions are persisted directly via Prisma
   }
 }
+

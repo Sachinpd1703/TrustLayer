@@ -12,7 +12,7 @@
     "type": "node",
     "entrypoint": "dist/mcp-bundle.js",
     "env": {
-      "TRUSTLAYER_API_URL": "https://trust-layer-amber.vercel.app"
+      "TRUSTLAYER_API_URL": "http://localhost:3000"
     }
   },
   "tools": [

@@ -30,7 +30,7 @@ export class PolicyEvaluator {
   /**
    * Deterministically evaluates an inbound transaction proposal against multi-tier policy rules and agent budgets.
    */
-  static evaluate(params: {
+  static async evaluate(params: {
     agentId: string;
     amountPaise: number;
     currency: string;
@@ -41,7 +41,7 @@ export class PolicyEvaluator {
     timestamp?: Date;
     agentProfile?: AgentFinancialProfile;
     policy: MultiTierPolicyRuleset;
-  }): DecisionResult {
+  }): Promise<DecisionResult> {
     const {
       agentId,
       amountPaise,
@@ -61,8 +61,9 @@ export class PolicyEvaluator {
     } = params;
 
     // 1. Calculate Velocity & Risk Score
-    const rolling24hSpendPaise = VelocityTracker.getRollingSpendPaise(agentId);
+    const rolling24hSpendPaise = await VelocityTracker.getRollingSpendPaise(agentId);
     const riskScore = RiskScorer.evaluate({ intent, reasoningText, amountPaise, merchantId });
+
 
     // Effective limits (Strictest between Agent Profile and Global Policy)
     const effectiveTier1Cap = Math.min(policy.tier1MaxOrderPaise, agentProfile.maxPerOrderCap);

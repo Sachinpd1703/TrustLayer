@@ -366,3 +366,17 @@ model WebhookIntegration {
   @@index([channel])
   @@index([isActive])
 }
+
+// --------------------------------------------------------
+// 11. Agent Anti-Replay Nonce Store
+// --------------------------------------------------------
+model AgentNonce {
+  id        String   @id @default(uuid())
+  agentId   String
+  nonce     String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@unique([agentId, nonce])
+  @@index([expiresAt])
+}

@@ -134,7 +134,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 5. Run Policy Decision Point (PDP)
-    const evaluation = PolicyEvaluator.evaluate({
+    const evaluation = await PolicyEvaluator.evaluate({
       agentId,
       amountPaise: orderPayload.amountPaise,
       currency: orderPayload.currency,

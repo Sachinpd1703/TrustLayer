@@ -13,7 +13,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import crypto from "crypto";
 
-const API_BASE_URL = process.env.TRUSTLAYER_API_URL || "https://trust-layer-amber.vercel.app";
+const API_BASE_URL = process.env.TRUSTLAYER_API_URL || "http://localhost:3000";
 
 // Initialize MCP Server
 const server = new Server(

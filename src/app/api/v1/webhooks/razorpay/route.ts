@@ -16,19 +16,32 @@ const WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET || "tl_whsec_test_dem
 export async function POST(req: NextRequest) {
   try {
     const rawBody = await req.text();
-    const signature = req.headers.get("x-razorpay-signature");
-
-    // 1. Verify HMAC-SHA256 Signature (if signature header present)
-    if (signature) {
+    // 1. Verify HMAC-SHA256 Signature
+    if (!signature) {
+      if (process.env.NODE_ENV === "production") {
+        return NextResponse.json(
+          { error: "MISSING_WEBHOOK_SIGNATURE: x-razorpay-signature header is strictly required." },
+          { status: 401 }
+        );
+      }
+    } else {
       const expectedSignature = crypto
         .createHmac("sha256", WEBHOOK_SECRET)
         .update(rawBody)
         .digest("hex");
 
-      if (signature !== expectedSignature && process.env.NODE_ENV === "production") {
-        return NextResponse.json({ error: "INVALID_WEBHOOK_SIGNATURE" }, { status: 401 });
+      const isSignatureMatch =
+        signature === expectedSignature ||
+        (process.env.NODE_ENV !== "production" && signature.startsWith("mock_"));
+
+      if (!isSignatureMatch) {
+        return NextResponse.json(
+          { error: "INVALID_WEBHOOK_SIGNATURE: Cryptographic HMAC-SHA256 verification failed." },
+          { status: 401 }
+        );
       }
     }
+
 
     const payload = JSON.parse(rawBody);
     const event = payload.event;
